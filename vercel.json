@@ -1,6 +1,6 @@
 {
   "installCommand": "npm ci --include=dev",
-  "buildCommand": "cd apps/web && node ../../node_modules/typescript/bin/tsc -p tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
+  "buildCommand": "if [ -d apps/web ]; then cd apps/web; fi && node ../../node_modules/typescript/bin/tsc -p tsconfig.json && node ../../node_modules/vite/bin/vite.js build",
   "outputDirectory": "apps/web/dist",
   "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }
