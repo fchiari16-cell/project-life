@@ -1,0 +1,10 @@
+{
+  "name": "@project-life/persistence",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "exports": { ".": "./src/index.ts" },
+  "scripts": { "typecheck": "tsc -p tsconfig.json" },
+  "dependencies": { "@project-life/schemas": "*", "@project-life/content": "*",
+    "@project-life/engine": "*", "dexie": "^4.2.0", "zod": "^4.1.0" }
+}
