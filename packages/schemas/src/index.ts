@@ -372,6 +372,13 @@ export const LifeConfigSchema = z.object({
 });
 export type LifeConfig = z.infer<typeof LifeConfigSchema>;
 
+/** Whether an action can be performed now; reasons and requirements are stable codes the interface translates. */
+export interface ActionAvailability {
+  available: boolean;
+  reasons: string[];
+  requirements: string[];
+}
+
 /** Birth years a new life can start from: the contemporary era the datasets describe (decision 1). */
 export const SUPPORTED_BIRTH_YEARS = { min: 1990, max: 2100 } as const;
 

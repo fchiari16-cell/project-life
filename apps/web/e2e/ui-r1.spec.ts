@@ -9,9 +9,9 @@ async function untilDecision(page: Page): Promise<string> {
   for (let i = 0; i < 40; i++) {
     const title = await textOf(dialog.getByRole('heading'));
     if (title) return title;
-    const date = await textOf(page.getByRole('banner').getByText(/^\d{2}\/\d{2}\/\d{4}$/));
+    const date = await textOf(page.locator('header').getByText(/^\d{2}\/\d{2}\/\d{4}$/));
     await page.getByRole('button', { name: 'Avanza di un anno' }).click();
-    await expect.poll(async () => (await textOf(dialog.getByRole('heading'))) !== null || (await textOf(page.getByRole('banner').getByText(/^\d{2}\/\d{2}\/\d{4}$/))) !== date, { timeout: 10_000 }).toBe(true);
+    await expect.poll(async () => (await textOf(dialog.getByRole('heading'))) !== null || (await textOf(page.locator('header').getByText(/^\d{2}\/\d{2}\/\d{4}$/))) !== date, { timeout: 10_000 }).toBe(true);
   }
   throw new Error('no decision appeared');
 }

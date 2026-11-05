@@ -1,5 +1,36 @@
 # Avanzamento verificato
 
+## UI Redesign v3.0 — UI-R3 Liste e modali universali (completata il 2026-11-05, in attesa di approvazione utente)
+Verificato: `npm run check` ✔ (typecheck, lint, 282 test Vitest, build) · `npm run e2e` ✔ (36 esecuzioni: 18 test × Chromium e WebKit) · axe-core WCAG 2.1 A/AA senza violazioni sulle nuove superfici, in chiaro e scuro.
+
+### Motore: disponibilità delle azioni (`ActionAvailability`)
+- `actionAvailability(stato, azione, { targetId })` per le azioni che oggi esistono davvero: **avanzare l'anno, rispondere a una decisione, modificare con GOD MODE, continuare la dinastia**. Restituisce `{ available, reasons[], requirements[] }` con **codici stabili** (la UI li traduce; un test verifica che ogni codice abbia una frase).
+- **Stessa fonte di verità dei comandi**: un test percorre vite intere (con e senza GOD MODE) e controlla in ogni stato che il verdetto coincida con ciò che `simulate` accetta; ogni "non disponibile" ha sempre motivo e requisito.
+- `certainCost(stato, ctx, scelta)`: il costo che una scelta **garantisce** (il minimo fra gli esiti), solo se *ogni* esito possibile dichiara un costo; nulla per i minorenni (il costo ricade sulla famiglia) né quando un esito è gratuito. Nel contenuto esistono 19 scelte così; gli esiti restano nascosti.
+
+### Componenti universali (PROJECT LIFE UI SYSTEM)
+`LifeList` / `LifeListItem` (icona o avatar, titolo, descrizione, valore, barra statistica, indicatore di progresso; informazione, sottosezione via link, azione diretta, menu contestuale, stato bloccato o pianificato con motivo), `LifeCategoryDivider`, `LifeActionMenu` (Radix Dropdown, da tastiera, voci bloccate con motivo), `LifeDisabledAction` (`aria-disabled`, focalizzabile, descritta; mai solo opacità), `LifeProgressIndicator` (`progressbar` con testo), `LifeDecisionButton` (costo certo oppure azione bloccata). Con i componenti di UI-R1 sono tutti quelli richiesti dal prompt.
+
+### Dove sono usati
+- **Relazioni**: elenco per gruppi (famiglia divisa in genitori, fratelli e sorelle, altri parenti), ogni riga con avatar, stato e barra "affetto"; la riga apre la **scheda persona** (`/relazioni/:id`: cosa prova lui/lei e cosa provi tu — 14 indicatori —, ricordi, modifica con GOD MODE); menu di riga (apri scheda; modifica personaggio, **bloccata con motivo** nelle vite senza GOD MODE).
+- **Finestra evento**: tipo di evento (icona e colore dell'area), **persona coinvolta** con relazione ed età, opzioni come `LifeDecisionButton` con costo certo dove esiste, nota "gli esiti non sono noti in anticipo".
+- **Pulsante annuale**: disabilitato dal verdetto del motore, con motivo ("Una decisione ti attende…") e cosa fare.
+- **Carriera** (istruzione con indicatore di rendimento, titoli, lavoro), **Altro** (sezioni Mondo/Società come lista con sottosezioni), **menu** (le funzioni non costruite sono righe "Pianificata" descritte e focalizzabili).
+
+### Difetti trovati e corretti
+1. Axe: il menu di riga, modale, nascondeva `#root` lasciando elementi focalizzabili (`aria-hidden-focus`, grave): ora il menu è non modale.
+2. Avevo messo una barra "livello su 5" nella Carriera: il motore **non ha un tetto di livello**, era un dato inventato. Rimossa.
+3. Test: un localizzatore basato sull'accessibilità smetteva di trovare l'intestazione appena si apriva la finestra evento (il resto diventa `aria-hidden`): su WebKit generava attese lunghe. Ora usa un selettore strutturale.
+4. Due cicli di rendering infiniti in UI-R2 erano già stati corretti; qui nessuno nuovo.
+
+### Non fatto / limiti (onesti)
+- **Scelte bloccate negli eventi**: nel contenuto le scelte non hanno requisiti propri (solo l'evento li ha), quindi oggi non esistono scelte "non disponibili" da mostrare. Il cablaggio (`LifeDecisionButton` con verdetto del motore) è pronto e provato con componenti e motore; le scelte davvero bloccate arriveranno con i binari motore M-R4/M-R5.
+- **Azioni sulle relazioni** (conversare, regalare, litigare…) e attività non esistono ancora nel motore: nella UI compaiono solo "Apri la scheda" e la modifica GOD MODE.
+- **Tipi di evento** del prompt (proposte di lavoro, scolastici…): mostro la categoria autorizzata nel contenuto (14); i personaggi coinvolti solo dove l'evento ne dichiara uno.
+- **Finanze, Mondo e Società** non sono migrate alle liste (tabelle numeriche dense): da fare con UI-R6.
+- Nuova dipendenza: `@radix-ui/react-dropdown-menu` (menu contestuali), della stessa famiglia già in uso.
+- Come sempre: Firefox, Safari/iPhone reali e screen reader non verificati; nuove stringhe solo in italiano.
+
 ## UI Redesign v3.0 — UI-R2 Nuova vita e GOD MODE (+ binario motore M-R2, schema v8) (completata il 2026-11-04, in attesa di approvazione utente)
 Verificato: `npm run check` ✔ (typecheck, lint, 259 test Vitest, build) · `npm run e2e` ✔ (26: 13 test × Chromium e WebKit esecuzioni su Chromium e WebKit).
 

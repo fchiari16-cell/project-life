@@ -91,6 +91,10 @@
 | T82 | 2026-11-04 | Personalizzazione alla nascita come `initialGodPatch` dentro la creazione (atomica, stesso schema e stesso piano di `GOD_EDIT`) | Un solo risultato salvato; l'anteprima non può divergere da ciò che nasce |
 | T83 | 2026-11-04 | Nuova vita in tre modalità con opzioni diverse; ricchezza e famiglia non scelte; statistiche generate mostrate solo con GOD MODE | Regole dell'economia e niente "reroll finché piace" gratuito |
 | T84 | 2026-11-04 | Genere non introdotto finché il GDD non gli dà un effetto; date di nascita 1990–2100 (`SUPPORTED_BIRTH_YEARS`) da confermare | Nessun campo decorativo; dati contemporanei |
+| T85 | 2026-11-05 | `ActionAvailability` calcolata dal motore (`actionAvailability`) con codici stabili tradotti dalla UI; coerenza con `simulate` provata su vite intere | La UI non decide mai se un'azione è disponibile (§17 del prompt) |
+| T86 | 2026-11-05 | Righe bloccate o pianificate come `aria-disabled` (focalizzabili, descritte), mai solo opacità o `disabled` | Chi usa tastiera o screen reader deve poter leggere il motivo; contrasto garantito |
+| T87 | 2026-11-05 | Costo mostrato solo se garantito in ogni esito (minimo); nulla per minorenni; esiti mai anticipati | Nessuna informazione inventata o spoiler |
+| T88 | 2026-11-05 | Menu contestuale su `@radix-ui/react-dropdown-menu`, non modale | Evita `aria-hidden-focus` segnalato da axe; focus e tastiera gestiti |
 
 ## Da decidere (non bloccanti per M0)
 - Estensione del Web Worker per la simulazione (M1/M3, in base ai benchmark).

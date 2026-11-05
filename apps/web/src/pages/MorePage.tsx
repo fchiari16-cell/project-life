@@ -1,9 +1,11 @@
 import { useRef } from 'react';
-import { Link } from 'react-router';
 import { ENGINE_VERSION, RULES_VERSION, CONTENT_VERSION, SCHEMA_VERSION } from '@project-life/schemas';
 import { Button } from '../components/ui/button';
 import { EventFeed } from '../components/EventFeed';
 import { SaveList } from '../components/SaveList';
+import { Globe, Landmark } from 'lucide-react';
+import { LifeList, LifeListItem } from '../components/life/LifeList';
+import { LifeSectionHeader } from '../components/life/LifeSectionHeader';
 import { AchievementsSection } from '../components/AchievementsSection';
 import { BackupSection } from '../components/BackupSection';
 import { GodSection } from '../components/GodSection';
@@ -56,23 +58,13 @@ export function MorePage() {
     <div className="grid gap-5">
       <h1 className="text-2xl font-bold">{t.nav.more}</h1>
 
-      <nav aria-labelledby="sections" className={card}>
-        <h2 id="sections" className="mb-3 text-lg font-bold">
-          {t.moreSections.title}
-        </h2>
-        <ul className="flex flex-wrap gap-3">
-          <li>
-            <Link className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 font-semibold hover:bg-muted" to="/mondo">
-              {t.moreSections.world}
-            </Link>
-          </li>
-          <li>
-            <Link className="inline-flex min-h-11 items-center rounded-lg border border-border px-4 font-semibold hover:bg-muted" to="/societa">
-              {t.moreSections.society}
-            </Link>
-          </li>
-        </ul>
-      </nav>
+      <section aria-labelledby="sections" className={card}>
+        <LifeSectionHeader id="sections" title={t.moreSections.title} />
+        <LifeList label={t.moreSections.title}>
+          <LifeListItem icon={Globe} title={t.moreSections.world} to="/mondo" />
+          <LifeListItem icon={Landmark} title={t.moreSections.society} to="/societa" />
+        </LifeList>
+      </section>
 
       <section aria-labelledby="settings" className={card}>
         <h2 id="settings" className="mb-3 text-lg font-bold">

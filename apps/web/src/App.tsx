@@ -8,6 +8,7 @@ import { LifePage } from './pages/LifePage';
 import { MorePage } from './pages/MorePage';
 import { NewLifePage } from './pages/NewLifePage';
 import { ProfilePage } from './pages/ProfilePage';
+import { RelationshipDetailPage } from './pages/RelationshipDetailPage';
 import { RelationshipsPage } from './pages/RelationshipsPage';
 import { SocietyPage } from './pages/SocietyPage';
 import { WorldPage } from './pages/WorldPage';
@@ -28,6 +29,7 @@ export function App() {
           <Route element={<Layout />}>
             <Route index element={<LifePage />} />
             <Route path="relazioni" element={<RelationshipsPage />} />
+            <Route path="relazioni/:id" element={<RelationshipDetailPage />} />
             <Route path="carriera" element={<CareerPage />} />
             <Route path="finanze" element={<FinancePage />} />
             <Route path="altro" element={<MorePage />} />

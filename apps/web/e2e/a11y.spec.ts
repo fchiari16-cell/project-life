@@ -105,14 +105,34 @@ test('accessibility of the new surfaces: profile, settings menu (light and dark)
     await expect(page.getByRole('dialog')).toHaveCount(0);
   }
 
+  // lists, a person's sheet and a row's contextual menu, in both themes
+  for (const scheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme: scheme, reducedMotion: 'reduce' });
+    await page.goto('/relazioni');
+    await expect(page.getByRole('heading', { name: 'Famiglia' })).toBeVisible();
+    await audit(page, `relationships list (${scheme})`, scheme);
+    await page.getByRole('button', { name: /^Azioni per / }).first().click();
+    await expect(page.getByRole('menu')).toBeVisible();
+    await audit(page, `row menu (${scheme})`, scheme);
+    await page.keyboard.press('Escape');
+    await page.getByRole('list', { name: 'Genitori' }).getByRole('link').first().click();
+    await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+    await audit(page, `person sheet (${scheme})`, scheme);
+  }
+  await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
+  await page.goto('/carriera');
+  await expect(page.getByRole('heading', { name: 'Istruzione' })).toBeVisible();
+  await audit(page, 'career list', 'light');
+  await page.goto('/');
+
   // decision window, in both themes
   await page.emulateMedia({ colorScheme: 'light', reducedMotion: 'reduce' });
   await page.goto('/');
   const dialog = page.getByRole('dialog');
   for (let i = 0; i < 40 && (await dialog.count()) === 0; i++) {
-    const before = await page.getByRole('banner').getByText(/^\d{2}\/\d{2}\/\d{4}$/).first().textContent();
+    const before = await page.locator('header').getByText(/^\d{2}\/\d{2}\/\d{4}$/).first().textContent();
     await page.getByRole('button', { name: 'Avanza di un anno' }).click();
-    await expect.poll(async () => (await dialog.count()) > 0 || (await page.getByRole('banner').getByText(/^\d{2}\/\d{2}\/\d{4}$/).first().textContent()) !== before, { timeout: 10_000 }).toBe(true);
+    await expect.poll(async () => (await dialog.count()) > 0 || (await page.locator('header').getByText(/^\d{2}\/\d{2}\/\d{4}$/).first().textContent()) !== before, { timeout: 10_000 }).toBe(true);
   }
   await expect(dialog).toBeVisible();
   await audit(page, 'decision window (light)', 'light');

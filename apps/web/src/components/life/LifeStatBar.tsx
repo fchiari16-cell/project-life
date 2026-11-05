@@ -3,8 +3,8 @@ import { cn } from '../../lib/utils';
 import { t } from '../../i18n/it';
 
 /** Higher is better, except stress. */
-const goodness = (key: string, value: number): 'good' | 'warn' | 'bad' => {
-  const v = key === 'stress' ? 100 - value : value;
+const goodness = (lowerIsBetter: boolean, value: number): 'good' | 'warn' | 'bad' => {
+  const v = lowerIsBetter ? 100 - value : value;
   return v >= 60 ? 'good' : v >= 35 ? 'warn' : 'bad';
 };
 const levelOf = (value: number): 'low' | 'mid' | 'high' => (value < 34 ? 'low' : value < 67 ? 'mid' : 'high');
@@ -14,8 +14,8 @@ const FILL = { good: 'bg-stat-good', warn: 'bg-stat-warn', bad: 'bg-stat-bad' } 
  * Horizontal statistic bar. Never colour alone: the label, the number and a word ("alto/medio/basso") all
  * carry the value, and the bar is a real `meter` for assistive technology.
  */
-export function LifeStatBar({ statKey, value, className }: { statKey: string; value: number; className?: string }) {
-  const label = t.stats[statKey as keyof typeof t.stats] ?? statKey;
+export function LifeStatBar({ statKey, value, label: labelOverride, lowerIsBetter, className }: { statKey: string; value: number; label?: string; lowerIsBetter?: boolean; className?: string }) {
+  const label = labelOverride ?? t.stats[statKey as keyof typeof t.stats] ?? statKey;
   const level = t.shell.level[levelOf(value)];
   return (
     <div className={className}>
@@ -34,7 +34,7 @@ export function LifeStatBar({ statKey, value, className }: { statKey: string; va
         aria-valuetext={`${value} (${level})`}
         className="h-2.5 overflow-hidden rounded-full bg-stat-track"
       >
-        <div className={cn('h-full rounded-full transition-[width] duration-[var(--dur-base)]', FILL[goodness(statKey, value)])} style={{ width: `${value}%` }} />
+        <div className={cn('h-full rounded-full transition-[width] duration-[var(--dur-base)]', FILL[goodness(lowerIsBetter ?? statKey === 'stress', value)])} style={{ width: `${value}%` }} />
       </div>
     </div>
   );

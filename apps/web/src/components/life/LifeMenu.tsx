@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { LOCALES, type LocaleCode } from '@project-life/content';
 import { cn } from '../../lib/utils';
+import { LifeDisabledAction } from './LifeDisabledAction';
 import { useGame } from '../../game/store';
 import { useLocale } from '../../i18n/locale';
 import { useTheme, type ThemeChoice } from '../../lib/theme';
@@ -26,17 +27,10 @@ import { t } from '../../i18n/it';
 
 const row = 'flex min-h-11 w-full items-center gap-3 rounded-lg px-3 py-2 text-left hover:bg-muted';
 
-function PlannedRow({ Icon, title }: { Icon: LucideIcon; title: string }) {
+function PlannedRow({ title }: { Icon: LucideIcon; title: string }) {
   return (
-    <li>
-      <div aria-disabled="true" className="flex min-h-11 items-center gap-3 rounded-lg px-3 py-2 text-muted-foreground">
-        <Icon aria-hidden="true" className="size-5 shrink-0" />
-        <span className="flex-1">
-          <span className="block">{title}</span>
-          <span className="block text-xs">{t.shell.plannedReason}</span>
-        </span>
-        <span className="rounded-full border border-border px-2 py-0.5 text-xs">{t.shell.planned}</span>
-      </div>
+    <li className="px-3 py-1">
+      <LifeDisabledAction label={title} planned />
     </li>
   );
 }

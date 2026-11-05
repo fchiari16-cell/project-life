@@ -1,6 +1,7 @@
-import { ageInYears, cash, debtOwed, netWorth } from '@project-life/engine';
+import { actionAvailability, ageInYears, cash, debtOwed, netWorth } from '@project-life/engine';
 import { Button } from '../components/ui/button';
 import { DynastyCard } from '../components/DynastyCard';
+import { LifeDisabledAction } from '../components/life/LifeDisabledAction';
 import { LifeDiary } from '../components/life/LifeDiary';
 import { LifeSectionHeader } from '../components/life/LifeSectionHeader';
 import { LifeStatList } from '../components/life/LifeStatBar';
@@ -24,7 +25,7 @@ function Dashboard() {
   const age = ageInYears(p.birth, endDate);
   const currency = game.finance.currency;
   const dead = p.death !== null;
-  const waiting = game.simulation.status === 'PAUSED_EVENT';
+  const advance = actionAvailability(game, 'ADVANCE_YEAR'); // the engine decides, the page only shows the verdict
   const lastJob = [...events].reverse().find((e) => e.type === 'JOB_CHANGED' && e.payload.professionId);
 
   return (
@@ -61,10 +62,13 @@ function Dashboard() {
 
         {!dead && (
           <div className="fixed inset-x-4 bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-30 md:sticky md:inset-x-auto md:bottom-auto md:top-24">
-            <Button size="lg" className="w-full text-base uppercase tracking-wide shadow-ui-2" onClick={() => void advanceYear()} disabled={busy || waiting} aria-busy={busy}>
-              {busy ? t.life.advancing : t.life.advance}
-            </Button>
-            {waiting && <p className="mt-1 rounded bg-card px-2 text-center text-xs text-muted-foreground">{t.life.decisionWaiting}</p>}
+            {advance.available ? (
+              <Button size="lg" className="w-full text-base uppercase tracking-wide shadow-ui-2" onClick={() => void advanceYear()} disabled={busy} aria-busy={busy}>
+                {busy ? t.life.advancing : t.life.advance}
+              </Button>
+            ) : (
+              <LifeDisabledAction className="rounded-xl bg-card p-2 shadow-ui-2" label={t.life.advance} availability={advance} />
+            )}
           </div>
         )}
 

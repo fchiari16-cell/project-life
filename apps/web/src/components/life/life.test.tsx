@@ -145,8 +145,9 @@ describe('app shell (UI-R1)', () => {
     expect(within(menu).getByRole('group', { name: 'Tema' })).toBeInTheDocument();
     // not built yet: shown as planned, and not operable
     for (const name of ['Albero genealogico', 'Accessibilità', 'Audio e notifiche']) {
-      expect(within(menu).getByText(name).closest('[aria-disabled="true"]')).not.toBeNull();
-      expect(within(menu).queryByRole('button', { name })).toBeNull();
+      const row = within(menu).getByRole('button', { name: new RegExp(name) });
+      expect(row).toHaveAttribute('aria-disabled', 'true'); // focusable, described, and does nothing
+      expect(row).toHaveAccessibleDescription(/Non ancora disponibile/);
     }
     expect(within(menu).getAllByText('Pianificata')).toHaveLength(3);
     expect(menu.textContent).not.toMatch(/god mode/i);

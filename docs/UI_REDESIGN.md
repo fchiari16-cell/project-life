@@ -1,7 +1,7 @@
 # UI Redesign v3.0 — PROJECT LIFE UI SYSTEM
 
 Specifica: master prompt "UI/UX REDESIGN v3.0" (2026-11-03). Questo documento è l'audit, il piano e le regole del redesign. Le fasi UI-R0…UI-R7 sono fasi del redesign UI e **non sostituiscono** i milestone M0–M7 (tutti completati e approvati).
-Stato: **UI-R0, UI-R1 e UI-R2 completate**. UI-R3 non iniziata, in attesa di approvazione.
+Stato: **UI-R0, UI-R1, UI-R2 e UI-R3 completate**. UI-R4 non iniziata, in attesa di approvazione.
 
 ## 1. Audit (stato effettivo al 2026-11-03)
 
@@ -99,7 +99,7 @@ In UI-R1…R3 si mostra solo ciò che esiste. Le schermate per sistemi non ancor
 | UI-R0 Audit e design system | **completata** | questo documento, token, test di contrasto |
 | UI-R1 Schermata principale | **completata** (vedi PROGRESS) | header con menu in alto a sinistra, diario annuale, pulsante annuale, statistiche, nav, responsive, modale evento migrata su Radix |
 | UI-R2 Nuova vita e GOD MODE | **completata** (vedi PROGRESS) | form completo, selettore bloccato, schema v8, migrazione, test |
-| UI-R3 Liste e modali | — | componenti `Life*`, azioni bloccate con motivo |
+| UI-R3 Liste e modali | **completata** (vedi PROGRESS) | componenti `Life*`, azioni bloccate con motivo |
 | UI-R4 Relazioni e istruzione | — | richiede M-R4 |
 | UI-R5 Carriere e attività | — | richiede M-R5 |
 | UI-R6 Finanze, imprese e mondo | — | richiede M-R6 |
