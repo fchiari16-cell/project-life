@@ -16,10 +16,10 @@ export * from './content.js';
  * Version registry. Every persisted artefact records these.
  * Bump rules are documented in docs/ARCHITECTURE.md §Versioning.
  * ------------------------------------------------------------------ */
-export const SCHEMA_VERSION = 7;
-export const ENGINE_VERSION = '0.7.0';
-export const RULES_VERSION = '0.7.0';
-export const CONTENT_VERSION = '0.7.0';
+export const SCHEMA_VERSION = 8;
+export const ENGINE_VERSION = '0.8.0';
+export const RULES_VERSION = '0.8.0';
+export const CONTENT_VERSION = '0.8.0';
 
 /* ------------------------------ primitives ------------------------- */
 export const IdSchema = z.string().min(1).max(128);
@@ -172,6 +172,8 @@ export const ChronicleEntrySchema = z.object({
   qualifications: z.array(QualificationSchema),
   lastProfession: z.string().nullable(),
   children: z.number().int().min(0),
+  /** Informational: whether this life was played with GOD MODE. */
+  godMode: z.boolean().default(false),
 });
 export type ChronicleEntry = z.infer<typeof ChronicleEntrySchema>;
 
@@ -359,8 +361,22 @@ export const GodLogEntrySchema = z.object({
 });
 export type GodLogEntry = z.infer<typeof GodLogEntrySchema>;
 
+/**
+ * Fixed when the life is created and never changed afterwards (UI Redesign v3.0, T71). Not editable from
+ * settings, from game actions, or by importing or migrating a save.
+ */
+export const LifeConfigSchema = z.object({
+  godModeEnabled: z.boolean(),
+  /** How the value came to be: chosen at creation, or derived when an older save was migrated (T72). */
+  godModeOrigin: z.enum(['chosen', 'migrated-from-usage', 'migrated-no-usage']),
+});
+export type LifeConfig = z.infer<typeof LifeConfigSchema>;
+
+/** Birth years a new life can start from: the contemporary era the datasets describe (decision 1). */
+export const SUPPORTED_BIRTH_YEARS = { min: 1990, max: 2100 } as const;
+
+/** What GOD MODE did in this life (informational). Whether it is on lives in `config.godModeEnabled`. */
 export const GodModeSchema = z.object({
-  enabled: z.boolean(),
   edits: z.number().int().min(0),
   log: z.array(GodLogEntrySchema).max(200),
 });
@@ -449,6 +465,8 @@ export const GameStateSchema = z.object({
   eventLog: z.record(z.string(), z.object({ lastYear: z.number().int(), count: z.number().int() })),
   flags: z.record(z.string(), z.literal(true)),
   /** GOD MODE: a switch and an informational log of edits (it never disables achievements or goals). */
+  /** Fixed at creation: see LifeConfigSchema. */
+  config: LifeConfigSchema,
   godMode: GodModeSchema,
   /** Unlocked achievements (id → year). Shared by normal play and GOD MODE; they only ever grow. */
   achievements: z.record(z.string(), z.number().int()),

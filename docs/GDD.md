@@ -23,6 +23,7 @@ simulazione deterministica e verificabile. Originale: nessuna copia di BitLife (
 11. IA generativa opzionale (mai modifica lo stato canonico; niente chiavi nel client).
 12. GOD MODE: editor di protagonista e NPC (nome, aspetto, stat, personalità, tratti, predisposizioni, talenti, abilità);
     NON modifica denaro, carriera, titoli, leggi, mondo, eventi futuri, genealogia, cronologia, relazioni; achievement condivisi; log informativo.
+    **Revisione 2026-11-03 (T71):** si attiva solo alla creazione di una vita e resta bloccata; la scelta si ripropone a ogni nuova vita di dinastia.
 
 ## Dipartimenti → milestone
 | # | Area | Milestone principale |

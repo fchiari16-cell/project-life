@@ -47,7 +47,8 @@ describe('migration chain end to end (release)', () => {
 
   it('GOD MODE, achievements and the new character fields exist and are neutral after migrating', () => {
     const s = migrated();
-    expect(s.godMode).toEqual({ enabled: false, edits: 0, log: [] });
+    expect(s.config).toEqual({ godModeEnabled: false, godModeOrigin: 'migrated-no-usage' });
+    expect(s.godMode).toEqual({ edits: 0, log: [] });
     expect(s.protagonist.talents).toEqual([]);
     expect(s.protagonist.predispositions).toEqual({ longevity: 50, robustness: 50 });
   });

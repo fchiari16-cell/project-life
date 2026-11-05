@@ -1,3 +1,4 @@
+import { GodPatchSchema } from '@project-life/schemas';
 import type {
   ContentBundle,
   GameState,
@@ -76,6 +77,29 @@ export function applyGodPatch(s: GameState, targetId: string, patch: GodPatch): 
     if (patch.stats) Object.assign(target.ref.stats, patch.stats);
     if (patch.skills) Object.assign(target.ref.skills, patch.skills);
   }
+}
+
+/** Why GOD MODE may not be switched: it is decided when the life is created. */
+export const GOD_LOCKED_MESSAGE = 'GOD MODE is chosen when a life is created and cannot be changed afterwards';
+
+/**
+ * Applies the character customisation chosen on the creation screen as part of the creation itself (one
+ * atomic result: revision 0). Only valid when GOD MODE was chosen; validated with the same plan as later
+ * edits. Returns an error message, or the log entry to record.
+ */
+export function applyCreationPatch(s: GameState, patch: GodPatch, content: ContentBundle): { ok: false; message: string } | { ok: true; changes: GodChange[]; name: string } {
+  if (!s.config.godModeEnabled) return { ok: false, message: 'a character customisation requires GOD MODE, which was not chosen' };
+  // The same strict schema the GOD_EDIT command uses: fields outside GOD MODE's scope are rejected, not ignored.
+  const parsed = GodPatchSchema.safeParse(patch);
+  if (!parsed.success) return { ok: false, message: parsed.error.issues.map((i) => i.message).join('; ') };
+  const plan = planGodEdit(s, s.protagonist.id, patch, content);
+  if (!plan.ok) return { ok: false, message: plan.issues.join('; ') };
+  if (plan.changes.length === 0) return { ok: true, changes: [], name: `${s.protagonist.givenName} ${s.protagonist.familyName}` };
+  applyGodPatch(s, s.protagonist.id, patch);
+  const name = `${s.protagonist.givenName} ${s.protagonist.familyName}`;
+  s.godMode.edits += 1;
+  pushGodLog(s, { revision: s.revision, year: s.world.currentDate.year, action: 'EDITED', targetId: s.protagonist.id, targetName: name, changes: plan.changes });
+  return { ok: true, changes: plan.changes, name };
 }
 
 export function pushGodLog(s: GameState, entry: GodLogEntry): void {

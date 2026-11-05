@@ -4,49 +4,72 @@ import { ProjectLifeDb } from '@project-life/persistence';
 import { MemoryCloudAdapter, narrate, syncOne } from '@project-life/services';
 import { GodEditor } from '../components/GodEditor';
 import { createGameStore, useGame } from './store';
+import { newLifeInput } from './test-inputs';
 
 let n = 0;
 const fresh = () => {
   const db = new ProjectLifeDb(`web-svc-${n++}`);
   return { db, store: createGameStore(db) };
 };
-const input = { givenName: 'Ada', familyName: 'Verdi', seed: 'abc', countryCode: 'IT' };
+const input = newLifeInput();
+const godInput = (seed: string) => newLifeInput({ seed, godModeEnabled: true });
 
 beforeEach(() => localStorage.clear());
 
 describe('GOD MODE through the store', () => {
-  it('toggles, edits, persists across a restart and logs; a refused edit saves nothing', async () => {
+  it('a life created without it refuses edits; one created with it edits, persists across a restart and logs', async () => {
+    const off = fresh();
+    await off.store.getState().init();
+    await off.store.getState().createLife(newLifeInput({ seed: 'svc-off' }));
+    expect(await off.store.getState().godEdit(off.store.getState().game!.protagonist.id, { givenName: 'Nope' })).toBe(false);
+    expect(off.store.getState().error).toMatch(/INVALID_TRANSITION/);
+    expect(off.store.getState().game!.protagonist.givenName).toBe('Ada');
+
     const { db, store } = fresh();
     await store.getState().init();
-    await store.getState().createLife(input);
+    await store.getState().createLife(godInput('svc-on'));
     const id = store.getState().game!.protagonist.id;
-
-    // off by default: the edit is refused and reported, nothing changes
-    expect(await store.getState().godEdit(id, { givenName: 'Nope' })).toBe(false);
-    expect(store.getState().error).toMatch(/INVALID_TRANSITION/);
-    expect(store.getState().game!.protagonist.givenName).toBe('Ada');
-    store.getState().clearError();
-
-    await store.getState().godToggle(true);
+    expect(store.getState().game!.config.godModeEnabled).toBe(true);
     expect(await store.getState().godEdit(id, { givenName: 'Nova', stats: { health: 88 } })).toBe(true);
     const g = store.getState().game!;
     expect([g.protagonist.givenName, g.protagonist.stats.health]).toEqual(['Nova', 88]);
-    expect(g.godMode.log.map((l) => l.action)).toEqual(['ENABLED', 'EDITED']);
+    expect(g.godMode.log.map((l) => l.action)).toEqual(['EDITED']);
 
     const restarted = createGameStore(db);
     await restarted.getState().init();
     expect(restarted.getState().game).toEqual(g);
+    expect(restarted.getState().game!.config.godModeEnabled).toBe(true); // the choice survives a restart
+  });
 
-    await store.getState().godToggle(false);
-    expect(store.getState().game!.protagonist.givenName).toBe('Nova'); // switching off keeps the edits
+  it('there is no way to switch it from the store: the toggle no longer exists', () => {
+    expect('godToggle' in useGame.getState()).toBe(false);
+  });
+
+  it('customises the newborn as part of the creation, in one saved result', async () => {
+    const { store } = fresh();
+    await store.getState().init();
+    await store.getState().createLife(newLifeInput({ seed: 'svc-create', godModeEnabled: true, initialGodPatch: { stats: { appearance: 91 }, talents: ['musical'] } }));
+    const g = store.getState().game!;
+    expect(g.revision).toBe(0);
+    expect([g.protagonist.stats.appearance, g.protagonist.talents]).toEqual([91, ['musical']]);
+    expect(g.godMode.edits).toBe(1);
+    expect(store.getState().diary.map((e) => e.type)).toContain('GOD');
+  });
+
+  it('a customisation without GOD MODE is refused as a whole: no life is created', async () => {
+    const { store } = fresh();
+    await store.getState().init();
+    await store.getState().createLife(newLifeInput({ seed: 'svc-bad', godModeEnabled: false, initialGodPatch: { stats: { appearance: 91 } } }));
+    expect(store.getState().game).toBeNull();
+    expect(store.getState().error).toMatch(/GOD MODE/);
+    expect(store.getState().saves).toHaveLength(0);
   });
 });
 
 describe('GodEditor (preview → confirm)', () => {
   it('shows the exact changes before saving, saves nothing until confirmed, then applies them', async () => {
     await useGame.getState().init();
-    await useGame.getState().createLife(input);
-    await useGame.getState().godToggle(true);
+    await useGame.getState().createLife(godInput('svc-editor-a'));
     const id = useGame.getState().game!.protagonist.id;
     const revision = useGame.getState().game!.revision;
     const onClose = vi.fn();
@@ -74,8 +97,7 @@ describe('GodEditor (preview → confirm)', () => {
 
   it('cancel discards the draft', async () => {
     await useGame.getState().init();
-    await useGame.getState().createLife(input);
-    await useGame.getState().godToggle(true);
+    await useGame.getState().createLife(godInput('svc-editor-b'));
     const g0 = useGame.getState().game!;
     const onClose = vi.fn();
     render(<GodEditor targetId={g0.protagonist.id} onClose={onClose} />);
@@ -109,7 +131,7 @@ describe('cloud sync: diverged devices keep both versions', () => {
     const cloud = new MemoryCloudAdapter();
     const device1 = fresh();
     await device1.store.getState().init();
-    await device1.store.getState().createLife(input);
+    await device1.store.getState().createLife(godInput('svc-cloud'));
     const rec1 = (await device1.store.getState().cloudRecord())!;
     expect(await syncOne(cloud, rec1, rec1.id)).toEqual({ status: 'PUSHED' });
 
@@ -119,7 +141,7 @@ describe('cloud sync: diverged devices keep both versions', () => {
     await device2.store.getState().adoptRemote(cloud.rows.get(rec1.id)!.payload, false);
     await device2.store.getState().openSave(rec1.id);
     await device1.store.getState().advanceYear();
-    await device2.store.getState().godToggle(true);
+    await device2.store.getState().godEdit(device2.store.getState().game!.protagonist.id, { givenName: 'Diverged' });
 
     expect(await syncOne(cloud, (await device1.store.getState().cloudRecord())!, rec1.id)).toEqual({ status: 'PUSHED' });
     const local2 = (await device2.store.getState().cloudRecord())!;
@@ -144,9 +166,8 @@ describe('offline guarantee', () => {
     try {
       const { store } = fresh();
       await store.getState().init();
-      await store.getState().createLife(input);
+      await store.getState().createLife(godInput('svc-offline'));
       await store.getState().advanceYear();
-      await store.getState().godToggle(true);
       await store.getState().godEdit(store.getState().game!.protagonist.id, { traits: { empathy: 77 } });
       const text = await store.getState().exportAll();
       await store.getState().restoreBackupText(text, {});

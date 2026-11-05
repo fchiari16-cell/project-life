@@ -2,13 +2,14 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { pendingChoices } from '@project-life/engine';
 import { ProjectLifeDb } from '@project-life/persistence';
 import { createGameStore, simulationContext } from './store';
+import { dynastyInput, newLifeInput } from './test-inputs';
 
 let n = 0;
 const fresh = () => {
   const db = new ProjectLifeDb(`web-test-${n++}`);
   return { db, store: createGameStore(db) };
 };
-const input = { givenName: 'Ada', familyName: 'Verdi', seed: 'abc', countryCode: 'IT' };
+const input = newLifeInput();
 
 beforeEach(() => localStorage.clear());
 
@@ -80,7 +81,7 @@ describe('game store', () => {
       else await store.getState().advanceYear();
     }
     const dead = store.getState().game!;
-    await store.getState().continueLife({ givenName: 'Nova', seed: 'next-gen', parentId: null });
+    await store.getState().continueLife(dynastyInput());
     expect(store.getState().error).toBeNull();
     const born = store.getState().game!;
     expect(born.dynasty).toMatchObject({ id: dead.dynasty.id, generation: 2 });

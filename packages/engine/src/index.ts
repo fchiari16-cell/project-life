@@ -30,7 +30,7 @@ export {
 } from './genealogy.js';
 export { fullName } from './npc.js';
 export { migrateSlot } from './migrate.js';
-export { planGodEdit, godTarget, type GodChange, type GodPlan } from './god.js';
+export { planGodEdit, godTarget, GOD_LOCKED_MESSAGE, type GodChange, type GodPlan } from './god.js';
 export { ACHIEVEMENTS, ACHIEVEMENT_IDS } from './achievements.js';
 export { initialEconomy, nextEconomy, taxPeriodFor, incomeTaxAnnual } from './economy.js';
 export { jobTitle } from './lifecycle.js';

@@ -128,12 +128,33 @@ function v6ToV7(state: Json): Json {
     contentVersion: CONTENT_VERSION,
     protagonist: { ...state.protagonist, predispositions: neutral, talents: [], skills: { social: 10, technical: 10, creative: 10, physical: 10 } },
     npcs,
-    godMode: { enabled: false, edits: 0, log: [] },
+    godMode: { enabled: false, edits: 0, log: [] }, // the shape this version had; v7ToV8 reads it
     achievements: {},
   };
 }
 
-const STEPS: Record<number, (s: Json, content: ContentBundle) => Json> = { 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7 };
+/**
+ * Schema v7 → v8: GOD MODE becomes a choice fixed at creation (T71/T72). A value is never assigned arbitrarily:
+ * it is derived from what the save itself proves. A log with an activation, or any recorded edit, shows the
+ * life used GOD MODE, so it is kept on (and locked); otherwise it is off (and locked). The origin records that
+ * the value was derived. The old on/off switch and the dynasty-wide log are dropped; chronicle entries gain an
+ * informational flag.
+ */
+function v7ToV8(state: Json): Json {
+  const old: Json = state.godMode ?? { enabled: false, edits: 0, log: [] };
+  const used = (old.edits ?? 0) > 0 || (old.log ?? []).some((e: Json) => e.action === 'ENABLED' || e.action === 'EDITED');
+  return {
+    ...state,
+    schemaVersion: 8,
+    rulesVersion: RULES_VERSION,
+    contentVersion: CONTENT_VERSION,
+    config: { godModeEnabled: used, godModeOrigin: used ? 'migrated-from-usage' : 'migrated-no-usage' },
+    godMode: { edits: old.edits ?? 0, log: old.log ?? [] },
+    dynasty: { ...state.dynasty, chronicle: (state.dynasty?.chronicle ?? []).map((c: Json) => ({ ...c, godMode: false })) },
+  };
+}
+
+const STEPS: Record<number, (s: Json, content: ContentBundle) => Json> = { 2: v2ToV3, 3: v3ToV4, 4: v4ToV5, 5: v5ToV6, 6: v6ToV7, 7: v7ToV8 };
 
 export interface MigrationResult {
   slot: Json;

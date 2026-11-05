@@ -1,0 +1,136 @@
+/*
+ * PROJECT LIFE UI SYSTEM — design tokens (UI-R0).
+ *
+ * Components never hard-code a colour: they read these tokens. The base palette (--background, --card,
+ * --primary …) lives in index.css; this file adds the scales (type, space, radius, shadow, motion) and the
+ * per-area themes. An area theme is applied with `data-area="health"` on any container and exposes four
+ * variables to everything inside it:
+ *   --area        accent usable as text or icon colour on --card (≥ 4.5:1)
+ *   --area-ink    text colour on --area-soft (≥ 4.5:1)
+ *   --area-soft   tinted surface
+ *   --on-area     text colour on a solid --area background (≥ 4.5:1)
+ * Contrast is enforced by src/design/tokens.test.ts for light and dark.
+ */
+
+:root {
+  /* Typography */
+  --text-xs: 0.75rem;
+  --text-sm: 0.875rem;
+  --text-base: 1rem;
+  --text-lg: 1.125rem;
+  --text-xl: 1.375rem;
+  --text-2xl: 1.75rem;
+  --text-3xl: 2.25rem;
+  --leading-tight: 1.2;
+  --leading-normal: 1.5;
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-bold: 700;
+
+  /* Spacing (4 px grid) */
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+  --space-10: 2.5rem;
+  --gutter: 1rem;
+
+  /* Interaction */
+  --target-min: 2.75rem; /* 44 px: minimum touch target */
+  --focus-width: 3px;
+  --focus-offset: 2px;
+
+  /* Radius */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --radius-full: 9999px;
+
+  /* Elevation */
+  --shadow-1: 0 1px 2px rgb(20 23 43 / 0.08);
+  --shadow-2: 0 4px 12px rgb(20 23 43 / 0.1);
+  --shadow-3: 0 12px 32px rgb(20 23 43 / 0.16);
+
+  /* Motion (all collapse to ~0 under prefers-reduced-motion, see index.css) */
+  --dur-fast: 120ms;
+  --dur-base: 200ms;
+  --dur-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+
+  /* Layers */
+  --z-nav: 40;
+  --z-drawer: 50;
+  --z-modal: 60;
+  --z-toast: 70;
+
+  /* Statistic bars: the fill is paired with the number and a text label, never colour alone */
+  --stat-track: var(--muted);
+  --stat-good: #067647;
+  --stat-warn: #92400e;
+  --stat-bad: #b42318;
+
+  /* Surfaces */
+  --surface-1: var(--card);
+  --surface-2: #eef0f7;
+  --surface-3: #e3e6f1;
+
+  /* Default area (before any data-area is set) */
+  --area: var(--primary);
+  --area-ink: #2a2380;
+  --area-soft: #e9e8fb;
+  --on-area: #ffffff;
+}
+
+.dark {
+  --shadow-1: 0 1px 2px rgb(0 0 0 / 0.4);
+  --shadow-2: 0 4px 12px rgb(0 0 0 / 0.45);
+  --shadow-3: 0 12px 32px rgb(0 0 0 / 0.55);
+  --stat-good: #6ce9a6;
+  --stat-warn: #fcd34d;
+  --stat-bad: #fda29b;
+  --surface-2: #1d2238;
+  --surface-3: #262c47;
+  --area-ink: #dcdcfb;
+  --area-soft: #25285a;
+  --on-area: #101330;
+}
+
+/* ── Area themes (light) ───────────────────────────────────────────── */
+[data-area='health'] { --area: #0f766e; --area-ink: #0b4f49; --area-soft: #e0f5f2; --on-area: #ffffff; }
+[data-area='relationships'] { --area: #c2410c; --area-ink: #7c2a08; --area-soft: #fdeadf; --on-area: #ffffff; }
+[data-area='education'] { --area: #1d4ed8; --area-ink: #173a9c; --area-soft: #e3ecfd; --on-area: #ffffff; }
+[data-area='finance'] { --area: #047857; --area-ink: #035a42; --area-soft: #ddf5ea; --on-area: #ffffff; }
+[data-area='career'] { --area: #1e3a8a; --area-ink: #162b69; --area-soft: #e1e6f5; --on-area: #ffffff; }
+[data-area='luxury'] { --area: #8a5a00; --area-ink: #5c3c00; --area-soft: #fbf0d3; --on-area: #ffffff; }
+[data-area='underground'] { --area: #6d28d9; --area-ink: #4c1d95; --area-soft: #efe7fc; --on-area: #ffffff; }
+
+/* ── Area themes (dark) ────────────────────────────────────────────── */
+.dark [data-area='health'] { --area: #5eead4; --area-ink: #c4f7ef; --area-soft: #12383a; --on-area: #062b27; }
+.dark [data-area='relationships'] { --area: #fdba74; --area-ink: #fde3cc; --area-soft: #46280f; --on-area: #3b1d06; }
+.dark [data-area='education'] { --area: #93c5fd; --area-ink: #d7e8fe; --area-soft: #1a2c52; --on-area: #0d1d3f; }
+.dark [data-area='finance'] { --area: #6ee7b7; --area-ink: #c9f6e2; --area-soft: #10372c; --on-area: #04271c; }
+.dark [data-area='career'] { --area: #7dd3fc; --area-ink: #cdeefe; --area-soft: #12324a; --on-area: #082338; }
+.dark [data-area='luxury'] { --area: #fcd34d; --area-ink: #fdeba8; --area-soft: #473a0b; --on-area: #2e2402; }
+.dark [data-area='underground'] { --area: #d8b4fe; --area-ink: #eddcff; --area-soft: #36205c; --on-area: #240f45; }
+
+/* Tailwind utilities backed by the tokens: bg-area, text-area-ink, rounded-lg-ui, shadow-ui-2 … */
+@theme inline {
+  --color-area: var(--area);
+  --color-area-ink: var(--area-ink);
+  --color-area-soft: var(--area-soft);
+  --color-on-area: var(--on-area);
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-stat-good: var(--stat-good);
+  --color-stat-warn: var(--stat-warn);
+  --color-stat-bad: var(--stat-bad);
+  --color-stat-track: var(--stat-track);
+  --shadow-ui-1: var(--shadow-1);
+  --shadow-ui-2: var(--shadow-2);
+  --shadow-ui-3: var(--shadow-3);
+}

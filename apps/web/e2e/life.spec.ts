@@ -1,14 +1,5 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
-
-async function createLife(page: Page): Promise<void> {
-  await page.goto('/');
-  await page.getByLabel('Nome', { exact: true }).fill('Ada');
-  await page.getByLabel('Cognome').fill('Verdi');
-  await page.getByLabel('Paese di nascita').selectOption('IT');
-  await page.getByLabel('Seed').fill('e2e-seed');
-  await page.getByRole('button', { name: 'Nasci' }).click();
-  await expect(page.getByRole('heading', { name: 'Ada Verdi' })).toBeVisible();
-}
+import { createLife } from './helpers';
 
 /** One interaction: answer a pending decision if there is one, otherwise advance a year. */
 async function step(page: Page): Promise<void> {
@@ -34,7 +25,7 @@ const textOf = async (l: Locator): Promise<string | null> =>
 
 test('M1 flow: create → decisions → persists across reload → offline → full life to death', async ({ page, context }) => {
   test.setTimeout(240_000); // a whole human life is ~80 clicks plus decisions
-  await createLife(page);
+  await createLife(page, { seed: 'e2e-seed' });
   await expect(page.getByText('0 anni').first()).toBeVisible();
 
   // Play a few years; the first decision card must be a real, answerable dialog.
@@ -81,9 +72,13 @@ test('M1 flow: create → decisions → persists across reload → offline → f
   await page.reload();
   await expect(page.getByRole('heading', { name: 'La vita è finita' })).toBeVisible();
 
-  // Dynasty: the next generation is born at once, as a child of a living relative.
+  // Dynasty: a new life in the family, through the creation screen, where GOD MODE is asked again (never inherited).
+  await page.getByRole('link', { name: 'Continua la dinastia' }).click();
+  await expect(page.getByRole('radio', { name: /Continuazione dinastica/ })).toBeChecked();
+  await expect(page.getByRole('radio', { name: /GOD MODE: DISATTIVA/ })).toBeChecked();
   await page.getByLabel('Nome del neonato/a').fill('Nova');
-  await page.getByRole('button', { name: 'Nasce la nuova generazione' }).click();
+  await page.getByRole('button', { name: 'Rivedi e conferma' }).click();
+  await page.getByRole('dialog', { name: 'Conferma definitiva' }).getByRole('button', { name: 'Conferma e nasci' }).click();
   await expect(page.getByRole('heading', { name: /^Nova / })).toBeVisible();
   await expect(page.getByText('Generazione 2').first()).toBeVisible();
   await expect(page.getByText('0 anni').first()).toBeVisible();

@@ -9,6 +9,6 @@ describe('App shell', () => {
     for (const name of ['Vita', 'Relazioni', 'Carriera', 'Finanze', 'Altro']) {
       expect(nav).toHaveTextContent(name);
     }
-    expect(await screen.findByRole('button', { name: 'Nasci' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Rivedi e conferma' })).toBeInTheDocument();
   });
 });

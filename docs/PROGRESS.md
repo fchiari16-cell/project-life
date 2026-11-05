@@ -1,5 +1,79 @@
 # Avanzamento verificato
 
+## UI Redesign v3.0 — UI-R2 Nuova vita e GOD MODE (+ binario motore M-R2, schema v8) (completata il 2026-11-04, in attesa di approvazione utente)
+Verificato: `npm run check` ✔ (typecheck, lint, 259 test Vitest, build) · `npm run e2e` ✔ (26: 13 test × Chromium e WebKit esecuzioni su Chromium e WebKit).
+
+### Motore (M-R2, schema v8)
+- **La scelta GOD MODE è nello stato e non cambia mai**: `config: { godModeEnabled, godModeOrigin }`. Si fissa in `createGame` / `continueDynasty` (parametro `godModeEnabled`, predefinito spento) e nessun comando, azione di gioco, importazione o migrazione può modificarla.
+- `GOD_TOGGLE` resta nello schema dei comandi (contratto pubblico) ma risponde **sempre** `INVALID_TRANSITION` ("GOD MODE is chosen when a life is created…"). `GOD_EDIT` richiede `config.godModeEnabled`.
+- `godMode` perde il campo `enabled` e tiene solo conteggio e registro; **il registro non si eredita** nella dinastia (ogni vita ha il suo). La cronaca della dinastia registra per informazione se la vita conclusa usava GOD MODE (`godMode` per voce).
+- **Personalizzazione alla creazione** (`initialGodPatch`): validata con lo stesso schema rigoroso di `GOD_EDIT` e con lo stesso piano `planGodEdit`; applicata nella creazione stessa (revisione 0, un solo risultato atomico, evento `GOD` e voce di registro). Rifiutata senza GOD MODE; una patch non valida rifiuta l'intera creazione. Non tocca il flusso casuale, quindi l'anteprima del personaggio coincide con la nascita.
+- **Invariante di integrità**: una vita che mostra attività GOD MODE (modifiche o registro) ma dichiara di non averla scelta è **non valida**: un file di salvataggio manomesso viene rifiutato all'importazione anche con checksum coerente.
+- **Data di nascita**: la creazione accetta solo anni fra `SUPPORTED_BIRTH_YEARS` (1990–2100, epoca contemporanea, decisione 1); è il motore a rifiutare il resto, la UI mostra l'errore.
+- **Migrazione v7→v8** (strategia confermata, T72): il valore è ricavato da ciò che il salvataggio dimostra. Registro con attivazione o modifiche registrate → GOD MODE **attiva** e bloccata (`migrated-from-usage`); nessuna traccia → **non attiva** e bloccata (`migrated-no-usage`), anche se l'interruttore vecchio risultava acceso senza tracce d'uso. La storia del registro resta. Verificata su salvataggi v7 (4 casi), sulla catena v6→v8 e v2→v8.
+
+### Interfaccia
+- **Schermata Nuova vita** (`/nuova-vita`, raggiungibile anche con una vita aperta; anche dentro *Vita* quando non c'è nulla di aperto): modalità **Casuale** (solo il nome), **Personalizzata** (nome, paese, città, data di nascita) e **Continuazione dinastica** (vita conclusa + genitore + nome; non disponibile, con il motivo, finché nessuna vita è conclusa). **Ricchezza e condizione familiare non si scelgono** (la UI lo spiega).
+- **Selettore "GOD MODE: ATTIVA / DISATTIVA"** (predefinito DISATTIVA, con la spiegazione del blocco). Con ATTIVA compare "Personalizza il personaggio" (statistiche visibili, tratti, predisposizioni, abilità, talenti) sul personaggio che il seed genera, con l'anteprima del motore delle modifiche. Senza GOD MODE le statistiche generate non vengono mostrate (evita di rigenerare il seed finché non piacciono).
+- **Conferma definitiva** (finestra modale): riepilogo e "GOD MODE: ATTIVA/DISATTIVA — resterà così per tutta questa vita"; "Indietro" non cambia nulla e fino alla conferma si può cambiare anche la scelta.
+- **Dinastia**: la scheda di fine vita porta alla stessa schermata con la scelta riproposta (mai ereditata).
+- **Altro → GOD MODE** è di **sola lettura**: stato, nota di blocco, origine se il valore è stato ricavato da una migrazione, registro, e (se attiva) "Modifica profilo". **Nessun interruttore in nessuna parte dell'app** né nel menu.
+- Editor GOD MODE diviso in `GodFields` (campi + anteprima, riusati alla creazione) e `GodEditor` (modifica dal vivo).
+- `store.godToggle` rimosso; `createLife`/`continueLife` prendono input completi; `previewNewLife`/`previewDynastyLife` pure per l'anteprima.
+
+### Difetti trovati e corretti durante il lavoro
+1. Due cicli di rendering infiniti scritti da me (un `useDeferredValue` su un oggetto nuovo a ogni render e le dipendenze di `GodFields`): trovati perché i test non terminavano; corretti (la UI non si blocca).
+2. Test M6 che davano per buono l'interruttore: riscritti per la regola nuova (non erano più veri).
+
+### Non fatto / limiti (onesti)
+- **Genere**: non aggiunto. Il motore non lo modella (nomi in un elenco unico, nessun ruolo che ne dipenda): un campo senza effetto sarebbe decorativo (regole 6–7). Serve una decisione di GDD.
+- **Aspetto, talenti e caratteristiche iniziali** sono personalizzabili **solo con GOD MODE** (nel prompt erano elencati fra i campi, ma senza GOD MODE sarebbero libertà di costruire il personaggio fuori dalle regole).
+- **Intervallo delle date di nascita** (1990–oggi): scelta prudente mia, da confermare; i dati del gioco sono modelli contemporanei e non ho verificato date più antiche.
+- **Salvataggi già in uso**: la regola di migrazione può portare un salvataggio a "GOD MODE attiva" anche se era stata spenta (se era stata usata); è la strategia che hai approvato, ma è irreversibile per quel salvataggio.
+- Le nuove stringhe sono solo in italiano; Firefox, Safari/iPhone reali e screen reader non sono verificati.
+- La personalizzazione alla nascita mostra l'anteprima del motore ma le anteprime richiedono ~decine di ms per cambio di scelta (misurato solo a sensazione, non con un benchmark).
+
+## UI Redesign v3.0 — UI-R1 Schermata principale (completata il 2026-11-03, in attesa di approvazione utente)
+Verificato: `npm run check` ✔ (typecheck, lint, 225 test Vitest, build) · `npm run e2e` ✔ (24 esecuzioni: 12 test × Chromium e WebKit) · axe-core WCAG 2.1 A/AA senza violazioni sulle nuove superfici.
+
+### Cosa c'è (solo dati e comandi già esistenti nel motore)
+- **Header persistente** (`LifeCharacterHeader`): menu in alto a sinistra, avatar generato (iniziali, nessuna risorsa esterna), nome, città e paese, età, professione, patrimonio netto dal libro contabile, data; il nome apre il **profilo** (`/profilo`, solo fatti visibili: i tratti nascosti restano nascosti).
+- **Menu impostazioni** (`LifeMenu`, drawer Radix con focus trap, Esc e ripristino del focus): Nuova vita, Continua vita, Gestione salvataggi, Cronologia delle vite, Lingua, Tema, Importazione/esportazione, Informazioni (collegamenti alle sezioni di *Altro*). **Albero genealogico, Accessibilità, Audio e notifiche** esistono come righe "Pianificata", non operative. **Nessun controllo GOD MODE** nel menu (T71).
+- **Diario** (`LifeDiary`): eventi reali del giornale, raggruppati per età, anni vuoti dichiarati come tali, persistente dopo il ricaricamento, "Mostra gli anni precedenti".
+- **Pulsante "+ AVANZA DI UN ANNO"** fisso sopra la navigazione su telefono e fisso in alto nella colonna su schermi larghi; disabilitato durante l'elaborazione e con una decisione in attesa; un doppio clic applica un solo anno.
+- **Finestra evento** (`LifeEventModal`, Radix Dialog): una decisione obbligatoria non si può chiudere (Esc e clic esterni ignorati), riprende dopo il ricaricamento, focus gestito.
+- **Statistiche** (`LifeStatBar`): etichetta, numero e parola (alto/medio/basso) oltre al colore; `meter` accessibile; stress letto come "più alto = peggio".
+- **Layout**: telefono (navigazione inferiore), tablet e desktop (sidebar; diario centrale e pannello statistiche/economia a lato).
+- Componenti nuovi: `LifeAvatar`, `LifeStatBar`/`LifeStatList`, `LifeMoneyDisplay`, `LifeSectionHeader`, `LifeCharacterHeader`, `LifeMenu`, `LifeEventModal`, `LifeDiary`. Rimossi `EventCard` e `StatMeter`.
+- Nuova dipendenza approvata (T75): `@radix-ui/react-dialog`.
+
+### Difetti trovati durante il lavoro e corretti
+1. `store.init()` poteva rieseguirsi (rimontaggio, React StrictMode) e **riaprire il salvataggio sopra un comando in corso**: ora è idempotente (test dedicato).
+2. Axe ha rilevato che il link del profilo non conteneva il testo visibile nel proprio nome accessibile (WCAG 2.5.3): corretto.
+3. Il caricamento del diario bloccava l'apertura di vite lunghe: ora è in background con stato "Carico il diario…".
+4. Il blocco "librerie" del bundle superava 500 kB con Radix: diviso in `ui` e `vendor` (4 blocchi, massimo 435 kB).
+5. Con il nuovo layout "Generazione N" non era più mostrata: ripristinata sotto il titolo.
+6. Test e2e di accessibilità: l'attesa che il tema scuro fosse applicato ora controlla anche i colori del testo (WebKit aggiorna sfondo e testo in momenti diversi).
+
+### Problemi noti / rischi (onesti)
+- **Prestazioni del diario su vite molto lunghe**: leggere il giornale filtrando migliaia di righe è lento in WebKit (una scrittura che si accoda dietro la lettura ritardò il passo "nuova generazione" oltre 5 s). Mitigazioni: caricamento in background, pagina iniziale di 40 voci, aggiornamento incrementale a ogni anno. Soluzione strutturale proposta per UI-R7: tabella `diary` dedicata in Dexie (schema v3 con backfill).
+- Il diario non mostra i "risultati economici" annuali (`FINANCE_YEAR` non ha ancora una descrizione leggibile); gli aspetti economici appaiono solo attraverso eventi di lavoro, patrimonio ed eventi.
+- Nel test jsdom il dialogo Radix non si smonta dopo la chiusura (artefatto del test: nel browser reale funziona, verificato a mano e in e2e).
+- L'elenco paesi contiene voci doppie ("Curaçao" AN/CW, "Serbia" CS/RS): codici GeoNames storici. Preesistente, non toccato (da correggere nel catalogo).
+- Le nuove stringhe sono solo in italiano (le altre 19 lingue ripiegano sull'italiano).
+- GOD MODE: il vecchio interruttore resta in *Altro → GOD MODE* fino a UI-R2 (T71).
+- Non verificato: Firefox, Safari/iPhone reali, screen reader, zoom 200–400 %.
+
+## UI Redesign v3.0 — UI-R0 Audit e design system (completata il 2026-11-03, in attesa di approvazione utente)
+Dettagli in `docs/UI_REDESIGN.md`. Nessuna schermata è cambiata: UI-R0 è audit, documentazione e design system.
+- **Audit**: mappa delle schermate, inventario componenti, capacità reali del motore. Esito principale: il motore ha 4 comandi (`ADVANCE_YEAR`, `RESOLVE_EVENT`, `GOD_TOGGLE`, `GOD_EDIT`) e nessun comando di attività/acquisto/relazione/carriera, né `ActionAvailability`: la UI "ricca di attività" richiede nuovi binari motore (M-R2, M-R4, M-R5, M-R6), non solo componenti.
+- **Design system**: `apps/web/src/design/tokens.css` (scale di tipografia, spazio, raggi, ombre, movimento, layer, touch target; sette temi di area chiaro/scuro) e `areas.ts`. Test `tokens.test.ts` (22): contrasto ≥ 4,5:1 per ogni area in chiaro e scuro, focus ≥ 3:1, completezza dei token; verificato anche in negativo.
+- **Decisioni** T71–T76: nuova regola GOD MODE (solo alla creazione, bloccata, riproposta per ogni dinastia), strategia di migrazione v7→v8 da confermare, piano a due binari, dipendenza Radix prevista.
+- **Contraddizione nota e temporanea**: l'app contiene ancora l'interruttore GOD MODE di M6 (Altro → GOD MODE), perché la sua rimozione è prevista in UI-R2 e non in UI-R0.
+- **Difetto trovato e corretto (e correzione di M7)**: il tema "sistema" seguiva il sistema operativo solo mentre la pagina Altro era aperta (il listener era nell'hook usato solo lì). Ora il tema è uno stato condiviso con un listener globale (`lib/theme.ts`, 4 test). Conseguenza: **l'audit di accessibilità di M7 in tema scuro non era davvero scuro** per Vita, Relazioni, Carriera e Finanze (il test cambiava il tema del sistema a pagina già aperta). Il test e2e ora verifica che il tema sia applicato (classe e colore di sfondo) prima di ogni audit scuro, stampa i colori misurati da axe e passa 12/12 su Chromium e WebKit. Il difetto causava un'instabilità intermittente (circa 1 esecuzione su 8).
+- **Verifica**: `npm run check` ✔ (212 test Vitest, lint, build), e2e 10/10 (Chromium e WebKit).
+- **Non verificato**: nessun test del layout nuovo (non esiste ancora); il redesign non è stato provato su dispositivi reali; la direzione "Luxury Editorial" citata nel prompt non esiste nel repository.
+
 ## M7 — Release candidate (completata il 2026-11-02, in attesa di approvazione utente)
 Verificato: `npm run check` ✔ (typecheck, lint, 186 test Vitest, build) · `npm run e2e` ✔ (10 test: 5 su Chromium e 5 su WebKit) · `npm run validate:content` ✔.
 

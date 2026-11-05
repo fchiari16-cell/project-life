@@ -8,6 +8,7 @@ export default defineConfig({
         test: {
           name: 'web',
           environment: 'jsdom',
+          testTimeout: 30_000, // rendering a 252-country form in jsdom is slow when the whole suite runs in parallel
           include: ['apps/web/src/**/*.test.{ts,tsx}'],
           setupFiles: ['apps/web/src/test-setup.ts'],
         },

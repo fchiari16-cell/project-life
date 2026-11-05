@@ -11,6 +11,9 @@ Lingua di lavoro con l'utente: **italiano**. Codice, commenti e identificatori: 
 - Non eliminare requisiti approvati. Le 12 decisioni trasversali (GDD §Decisioni) non si reinterpretano senza chiedere.
 - Sii critico: segnala rischi tecnici e proponi alternative motivate.
 
+## Redesign UI v3.0
+Piano, audit e regole in `docs/UI_REDESIGN.md`. Una fase UI-R alla volta, con approvazione. **GOD MODE si sceglie solo alla creazione della vita e poi è bloccata** (T71, attuata in schema v8: `config.godModeEnabled`): nessun interruttore in UI/menu dopo l'inizio; `GOD_TOGGLE` risponde sempre con errore. I componenti usano i token di `apps/web/src/design/tokens.css` (temi di area con `data-area`), non colori scritti a mano. La UI non duplica la logica: le azioni disponibili le decide il motore.
+
 ## Architettura (vincoli)
 - Monorepo npm workspaces: `packages/{schemas,engine,persistence,content,services}`, `apps/web`. Niente pnpm.
 - `engine` è puro: niente React/DOM/Dexie, niente `Math.random`, `Date.now`, `new Date` (imposto da ESLint). Solo `Rng` con seed.

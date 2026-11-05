@@ -1,9 +1,11 @@
+import { useEffect } from 'react';
 import { Briefcase, Heart, Menu, Users, Wallet, type LucideIcon } from 'lucide-react';
-import { NavLink, Outlet } from 'react-router';
+import { NavLink, Outlet, useLocation } from 'react-router';
 import { cn } from '../lib/utils';
 import { t } from '../i18n/it';
 import { ErrorBanner } from './ErrorBanner';
-import { EventCard } from './EventCard';
+import { LifeCharacterHeader } from './life/LifeCharacterHeader';
+import { LifeEventModal } from './life/LifeEventModal';
 
 const items = (): { to: string; label: string; Icon: LucideIcon; end?: boolean }[] => [
   { to: '/', label: t.nav.life, Icon: Heart, end: true },
@@ -15,6 +17,15 @@ const items = (): { to: string; label: string; Icon: LucideIcon; end?: boolean }
 
 export function Layout() {
   const ITEMS = items();
+  const { pathname, hash } = useLocation();
+
+  // Links such as /altro#backup-all (from the settings menu) scroll to their section; plain navigation starts at the top.
+  useEffect(() => {
+    const target = hash ? document.getElementById(hash.slice(1)) : null;
+    if (target) target.scrollIntoView({ block: 'start' });
+    else window.scrollTo({ top: 0 });
+  }, [pathname, hash]);
+
   return (
     <div className="min-h-dvh md:grid md:grid-cols-[15rem_1fr]">
       <a
@@ -28,7 +39,7 @@ export function Layout() {
         aria-label={t.nav.main}
         className={cn(
           'fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card pb-[env(safe-area-inset-bottom)]',
-          'md:static md:inset-auto md:flex md:min-h-dvh md:flex-col md:border-r md:border-t-0 md:p-4',
+          'md:sticky md:top-0 md:inset-auto md:flex md:h-dvh md:flex-col md:border-r md:border-t-0 md:p-4',
         )}
       >
         <p className="hidden px-3 pb-6 pt-2 text-lg font-bold tracking-wide md:block">{t.appName}</p>
@@ -54,11 +65,14 @@ export function Layout() {
         </ul>
       </nav>
 
-      <main id="main" tabIndex={-1} className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 md:px-8 md:pb-10">
-        <ErrorBanner />
-        <Outlet />
-      </main>
-      <EventCard />
+      <div className="min-w-0">
+        <LifeCharacterHeader />
+        <main id="main" tabIndex={-1} className="mx-auto w-full max-w-5xl px-4 pb-28 pt-6 md:px-8 md:pb-10">
+          <ErrorBanner />
+          <Outlet />
+        </main>
+      </div>
+      <LifeEventModal />
     </div>
   );
 }

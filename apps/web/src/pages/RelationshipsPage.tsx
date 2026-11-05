@@ -74,7 +74,7 @@ function Person({ game, npc, code }: { game: GameState; npc: Npc; code: Relation
             </ul>
           )}
         </div>
-        {game.godMode.enabled && npc.deathYear === null && (
+        {game.config.godModeEnabled && npc.deathYear === null && (
           <div className="mt-4">
             {editing ? (
               <GodEditor targetId={npc.id} onClose={() => setEditing(false)} />

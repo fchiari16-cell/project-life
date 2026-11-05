@@ -77,6 +77,20 @@
 | T68 | 2026-11-02 | Accessibilità: audit axe-core WCAG 2.1 AA come test e2e permanente (chiaro/scuro, 375 px, editor GOD MODE) | Una regressione di contrasto o di etichette rompe la build |
 | T69 | 2026-11-02 | Bundle in tre blocchi (app, contenuti, librerie) | Sotto i 500 kB per blocco; gli aggiornamenti non riscaricano le librerie |
 | T70 | 2026-11-02 | Playwright: Chromium e WebKit di default, Firefox opt-in (`E2E_FIREFOX=1`) | Firefox non è eseguibile sulla macchina di sviluppo; non si dichiara verificato ciò che non lo è |
+| T71 | 2026-11-03 | **GOD MODE si sceglie solo alla creazione della vita e poi è bloccata** (sostituisce l'attivazione in vita di D12/T59); riproposta a ogni nuova vita di dinastia; nessun comando in UI né nel menu | Richiesta dell'utente (UI Redesign v3.0 §6). Contratto: `godModeEnabled` nello stato (schema v8); `GOD_TOGGLE` deprecato, non rimosso |
+| T72 | 2026-11-03 | Migrazione v7→v8 di GOD MODE derivata dalle prove nel salvataggio (registro o modifiche = attiva), mai assegnata arbitrariamente; **da confermare** prima di UI-R2 | Il prompt vieta un valore arbitrario senza strategia verificata |
+| T73 | 2026-11-03 | Il redesign procede per fasi UI-R0…R7 con **binari motore** prerequisiti (M-R2, M-R4, M-R5, M-R6) | Il motore non ha comandi di attività, acquisto o relazione: senza di essi i pulsanti sarebbero decorativi |
+| T74 | 2026-11-03 | PROJECT LIFE UI SYSTEM: token in `design/tokens.css`, sette temi di area con `data-area`, contrasto ≥ 4,5:1 verificato da test in chiaro e scuro | Coerenza e accessibilità senza colori scritti nei componenti |
+| T75 | 2026-11-03 | Nuova dipendenza prevista (da approvare in UI-R1): `@radix-ui/react-dialog` per drawer e modali | Focus trap e ripristino del focus corretti invece di codice scritto a mano |
+| T76 | 2026-11-03 | Le sezioni per sistemi non ancora sviluppati sono mostrate come "pianificate", mai come operative | Regole 6–8 del master prompt |
+| T77 | 2026-11-03 | Header persistente con menu sempre in alto a sinistra; il nome del protagonista apre `/profilo`; le funzioni non costruite sono righe "Pianificata" non attivabili | Requisito del prompt e regole 6–8: nessun pulsante senza comportamento |
+| T78 | 2026-11-03 | Diario = eventi reali del giornale, per età, caricato in background, pagina da 40, aggiornamento incrementale; strutturale: tabella `diary` dedicata in UI-R7 | La scansione filtrata del giornale è lenta su vite lunghe (WebKit) |
+| T79 | 2026-11-03 | Finestra evento su `@radix-ui/react-dialog`; una decisione obbligatoria non è chiudibile | Focus trap e ripristino del focus corretti; coerenza con la macchina a stati |
+| T80 | 2026-11-03 | `store.init()` idempotente; il tema è stato globale con listener unico | Evitare corse di riapertura e tema che non segue il sistema |
+| T81 | 2026-11-04 | Schema v8: `config.godModeEnabled` (+ origine) immutabile, fissato solo da `createGame`/`continueDynasty`; `GOD_TOGGLE` risponde sempre con errore; registro non ereditato; invariante "attività senza scelta = stato non valido" | Attua T71; protegge anche da import manomessi |
+| T82 | 2026-11-04 | Personalizzazione alla nascita come `initialGodPatch` dentro la creazione (atomica, stesso schema e stesso piano di `GOD_EDIT`) | Un solo risultato salvato; l'anteprima non può divergere da ciò che nasce |
+| T83 | 2026-11-04 | Nuova vita in tre modalità con opzioni diverse; ricchezza e famiglia non scelte; statistiche generate mostrate solo con GOD MODE | Regole dell'economia e niente "reroll finché piace" gratuito |
+| T84 | 2026-11-04 | Genere non introdotto finché il GDD non gli dà un effetto; date di nascita 1990–2100 (`SUPPORTED_BIRTH_YEARS`) da confermare | Nessun campo decorativo; dati contemporanei |
 
 ## Da decidere (non bloccanti per M0)
 - Estensione del Web Worker per la simulazione (M1/M3, in base ai benchmark).

@@ -4,10 +4,12 @@ import {
   type EngineResult,
   type FamilyClass,
   type GameState,
+  type GodPatch,
   type Npc,
   type SimulationContext,
 } from '@project-life/schemas';
 import { checksum, stateChecksum } from './canonical.js';
+import { applyCreationPatch } from './god.js';
 import { emptyTotals, netWorth } from './finance.js';
 import { childrenOf, descendantsOf, partnerIdOf, relationCode, unionOf } from './genealogy.js';
 import { validateState } from './invariants.js';
@@ -91,12 +93,20 @@ function prune(s: GameState, roots: Set<string>): void {
  */
 export function continueDynasty(
   prev: GameState,
-  params: { seed: string; givenName: string; parentId?: string | null },
+  params: {
+    seed: string;
+    givenName: string;
+    parentId?: string | null;
+    /** Asked again for every new life of the dynasty: never inherited from the previous one (T71). */
+    godModeEnabled?: boolean;
+    initialGodPatch?: GodPatch;
+  },
   ctx: SimulationContext,
 ): EngineResult {
   const fail = (message: string): EngineResult => ({ ok: false, error: { code: 'INVALID_COMMAND', message } });
   if (!prev.protagonist.death) return fail('the current life has not ended');
   if (!params.seed.trim() || !params.givenName.trim()) return fail('seed and name are required');
+  if (params.initialGodPatch && !params.godModeEnabled) return fail('a character customisation requires GOD MODE, which was not chosen');
   const country = ctx.content.countries.find((c) => c.code === prev.location.countryCode);
   if (!country) return { ok: false, error: { code: 'UNKNOWN_CONTENT', message: 'unknown country' } };
 
@@ -196,6 +206,7 @@ export function continueDynasty(
           qualifications: prev.education.qualifications,
           lastProfession: prev.career.job?.professionId ?? null,
           children: childrenOf(prev, me.id).length,
+          godMode: prev.config.godModeEnabled,
         },
       ],
     },
@@ -225,6 +236,8 @@ export function continueDynasty(
     properties: {},
     eventLog: {},
     flags: {},
+    config: { godModeEnabled: params.godModeEnabled === true, godModeOrigin: 'chosen' },
+    godMode: { edits: 0, log: [] },
     lastCommandId: null,
   };
 
@@ -269,11 +282,17 @@ export function continueDynasty(
   }
   next.rng = rng.state();
 
+  const customisation = params.initialGodPatch ? applyCreationPatch(next, params.initialGodPatch, ctx.content) : null;
+  if (customisation && !customisation.ok) return fail(customisation.message);
+
   const issues = validateState(next);
   if (issues.length) return { ok: false, error: { code: 'INVARIANT_VIOLATION', message: issues.join('; ') } };
   const events: DomainEvent[] = [
     { id: `${id}:0:0`, revision: 0, sequence: 0, at: deathDate, type: 'LIFE_CREATED', payload: { personId, seed: params.seed, countryCode: newCountry.code } },
   ];
+  if (customisation?.ok && customisation.changes.length > 0) {
+    events.push({ id: `${id}:0:1`, revision: 0, sequence: 1, at: deathDate, type: 'GOD', payload: { action: 'EDITED', targetId: personId, targetName: customisation.name, changes: customisation.changes.length } });
+  }
   return {
     ok: true,
     state: next,

@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 
 export type ThemeChoice = 'system' | 'light' | 'dark';
 const KEY = 'pl-theme';
+const QUERY = '(prefers-color-scheme: dark)';
 
 function read(): ThemeChoice {
   try {
@@ -12,34 +13,48 @@ function read(): ThemeChoice {
   }
 }
 
+const systemPrefersDark = (): boolean => typeof matchMedia === 'function' && matchMedia(QUERY).matches;
+
 function apply(choice: ThemeChoice): void {
-  const dark = choice === 'dark' || (choice === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+  const dark = choice === 'dark' || (choice === 'system' && systemPrefersDark());
   document.documentElement.classList.toggle('dark', dark);
 }
 
+/**
+ * The theme is app-wide state, not tied to any screen: one shared choice, and one operating-system
+ * listener installed once, so "system" keeps following the OS whichever page is open.
+ */
+let choice: ThemeChoice = read();
+const subscribers = new Set<() => void>();
+
+if (typeof document !== 'undefined') {
+  apply(choice);
+  if (typeof matchMedia === 'function') {
+    matchMedia(QUERY).addEventListener('change', () => {
+      if (choice === 'system') apply('system');
+    });
+  }
+}
+
+function setChoice(next: ThemeChoice): void {
+  try {
+    if (next === 'system') localStorage.removeItem(KEY);
+    else localStorage.setItem(KEY, next);
+  } catch {
+    /* preference just won't persist */
+  }
+  choice = next;
+  apply(next);
+  subscribers.forEach((fn) => fn());
+}
+
+const subscribe = (fn: () => void): (() => void) => {
+  subscribers.add(fn);
+  return () => subscribers.delete(fn);
+};
+
 export function useTheme(): [ThemeChoice, (c: ThemeChoice) => void] {
-  const [choice, setChoice] = useState<ThemeChoice>(read);
-
-  useEffect(() => {
-    apply(choice);
-    if (choice !== 'system') return;
-    const mq = matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (): void => apply('system');
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, [choice]);
-
-  const set = useCallback((c: ThemeChoice) => {
-    try {
-      if (c === 'system') localStorage.removeItem(KEY);
-      else localStorage.setItem(KEY, c);
-    } catch {
-      /* preference just won't persist */
-    }
-    setChoice(c);
-  }, []);
-
-  return [choice, set];
+  return [useSyncExternalStore(subscribe, () => choice), setChoice];
 }
 
 export function useOnline(): boolean {

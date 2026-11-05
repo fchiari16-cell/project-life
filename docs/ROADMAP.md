@@ -15,3 +15,6 @@ Ogni milestone richiede: test automatici, build verde, documentazione aggiornata
 
 Dipendenze: M1 → M2 → M3 → M4 → M5; M6 dipende da M1 (stato) e M2 (NPC); M7 dopo tutte.
 Non pubblicare come versione completa una build che non soddisfa copertura globale e professionale (M5).
+
+## Redesign UI v3.0 (fasi UI-R, non sostituiscono M0–M7)
+Dettagli, audit e rischi in `docs/UI_REDESIGN.md`. UI-R0 (audit e design system), UI-R1 (schermata principale) e UI-R2 (nuova vita e GOD MODE, schema v8) completate; UI-R3…R7 in attesa di approvazione una alla volta. Le fasi che aggiungono azioni (R4–R6) richiedono prima un binario motore con schema/versione, migrazione e test.

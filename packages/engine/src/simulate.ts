@@ -2,12 +2,14 @@ import {
   EngineCommandSchema,
   GameStateSchema,
   SCHEMA_VERSION,
+  SUPPORTED_BIRTH_YEARS,
   type DomainEvent,
   type EngineCommand,
   type EngineErrorCode,
   type EngineResult,
   type FamilyClass,
   type GameState,
+  type GodPatch,
   type SimDate,
   type SimulationCheckpoint,
   type SimulationContext,
@@ -18,7 +20,7 @@ import { addMonth, isValidDate } from './calendar.js';
 import { checksum, stateChecksum } from './canonical.js';
 import { updateAchievements } from './achievements.js';
 import { monthlyAssets } from './assets.js';
-import { applyGodPatch, planGodEdit, pushGodLog } from './god.js';
+import { GOD_LOCKED_MESSAGE, applyCreationPatch, applyGodPatch, planGodEdit, pushGodLog } from './god.js';
 import { monthlyBusinesses } from './business.js';
 import { maybeTriggerEvent, resolvePending } from './events.js';
 import { monthlyFinance, emptyTotals } from './finance.js';
@@ -46,6 +48,12 @@ export interface CreateGameParams {
   /** Null/undefined = random country (Random Life). */
   countryCode?: string | null;
   city?: string | null;
+  /**
+   * GOD MODE is chosen here and nowhere else: it is stored in `config` and never changes (T71). Defaults to off.
+   */
+  godModeEnabled?: boolean;
+  /** Character customisation made on the creation screen; only valid with GOD MODE, applied as part of the creation. */
+  initialGodPatch?: GodPatch;
 }
 
 const CLASS_WEIGHTS: [FamilyClass, number][] = [
@@ -109,6 +117,10 @@ export function createGame(params: CreateGameParams, ctx: SimulationContext): En
   if (!params.seed.trim()) return fail('INVALID_COMMAND', 'seed is required');
   if (!given || !family) return fail('INVALID_COMMAND', 'name and surname are required');
   if (!isValidDate(params.startDate)) return fail('INVALID_COMMAND', 'invalid start date');
+  if (params.startDate.year < SUPPORTED_BIRTH_YEARS.min || params.startDate.year > SUPPORTED_BIRTH_YEARS.max) {
+    return fail('INVALID_COMMAND', `birth year must be between ${SUPPORTED_BIRTH_YEARS.min} and ${SUPPORTED_BIRTH_YEARS.max}`);
+  }
+  if (params.initialGodPatch && !params.godModeEnabled) return fail('INVALID_COMMAND', 'a character customisation requires GOD MODE, which was not chosen');
   const { countries, givenNames } = ctx.content;
   if (countries.length === 0 || givenNames.length === 0) return fail('UNKNOWN_CONTENT', 'content bundle is empty');
 
@@ -154,7 +166,8 @@ export function createGame(params: CreateGameParams, ctx: SimulationContext): En
     finance: { currency: country.currency, minorUnits: country.minorUnits, accounts: {}, thisYear: emptyTotals(), lastYear: null, gainsThisYear: 0 },
     eventLog: {},
     flags: {},
-    godMode: { enabled: false, edits: 0, log: [] },
+    config: { godModeEnabled: params.godModeEnabled === true, godModeOrigin: 'chosen' },
+    godMode: { edits: 0, log: [] },
     achievements: {},
     lastCommandId: null,
   };
@@ -188,6 +201,12 @@ export function createGame(params: CreateGameParams, ctx: SimulationContext): En
   }
   state.rng = rng.state();
 
+  let customisation: ReturnType<typeof applyCreationPatch> | null = null;
+  if (params.initialGodPatch) {
+    customisation = applyCreationPatch(state, params.initialGodPatch, ctx.content);
+    if (!customisation.ok) return fail('INVALID_COMMAND', customisation.message);
+  }
+
   const issues = validateState(state);
   if (issues.length) return fail('INVARIANT_VIOLATION', issues.join('; '));
   const events: DomainEvent[] = [
@@ -200,6 +219,9 @@ export function createGame(params: CreateGameParams, ctx: SimulationContext): En
       payload: { personId, seed: params.seed, countryCode: country.code },
     },
   ];
+  if (customisation?.ok && customisation.changes.length > 0) {
+    events.push({ id: `${id}:0:1`, revision: 0, sequence: 1, type: 'GOD', at: params.startDate, payload: { action: 'EDITED', targetId: personId, targetName: customisation.name, changes: customisation.changes.length } });
+  }
   return { ok: true, state, events, checkpoint: makeCheckpoint(state, 'LIFE_CREATED'), duplicate: false };
 }
 
@@ -283,6 +305,9 @@ export function simulate(stateInput: GameState, commandInput: unknown, ctx: Simu
 }
 
 function godCommand(state: GameState, cmd: Extract<EngineCommand, { type: 'GOD_TOGGLE' | 'GOD_EDIT' }>, ctx: SimulationContext): EngineResult {
+  // GOD_TOGGLE stays in the command schema for compatibility, but the switch no longer exists (T71).
+  if (cmd.type === 'GOD_TOGGLE') return fail('INVALID_TRANSITION', GOD_LOCKED_MESSAGE);
+  if (!state.config.godModeEnabled) return fail('INVALID_TRANSITION', 'GOD MODE was not chosen when this life was created');
   if (state.simulation.status === 'RUNNING' || state.simulation.status === 'RESOLVING' || state.simulation.status === 'ERROR') {
     return fail('INVALID_TRANSITION', `GOD MODE cannot be used while the simulation is ${state.simulation.status}`);
   }
@@ -291,25 +316,16 @@ function godCommand(state: GameState, cmd: Extract<EngineCommand, { type: 'GOD_T
   const draft = structuredClone(state);
   const rev = state.revision + 1;
   const run = makeRun(draft, ctx, country, new Rng(draft.rng), rev);
-  const year = draft.world.currentDate.year;
 
-  if (cmd.type === 'GOD_TOGGLE') {
-    if (draft.godMode.enabled === cmd.enabled) return { ok: true, state, events: [], checkpoint: null, duplicate: true };
-    draft.godMode.enabled = cmd.enabled;
-    const action = cmd.enabled ? 'ENABLED' : 'DISABLED';
-    pushGodLog(draft, { revision: rev, year, action, targetId: null, targetName: null, changes: [] });
-    emit(run, 'GOD', { action, targetId: null, targetName: null, changes: 0 });
-  } else {
-    if (!draft.godMode.enabled) return fail('INVALID_TRANSITION', 'GOD MODE is off');
-    const plan = planGodEdit(draft, cmd.targetId, cmd.patch, ctx.content);
-    if (!plan.ok) return fail('INVALID_COMMAND', plan.issues.join('; '));
-    if (plan.changes.length === 0) return { ok: true, state, events: [], checkpoint: null, duplicate: true }; // already as requested
-    applyGodPatch(draft, cmd.targetId, cmd.patch);
-    const name = cmd.targetId === draft.protagonist.id ? `${draft.protagonist.givenName} ${draft.protagonist.familyName}` : `${draft.npcs[cmd.targetId]?.givenName ?? ''} ${draft.npcs[cmd.targetId]?.familyName ?? ''}`.trim();
-    draft.godMode.edits += 1;
-    pushGodLog(draft, { revision: rev, year, action: 'EDITED', targetId: cmd.targetId, targetName: name, changes: plan.changes });
-    emit(run, 'GOD', { action: 'EDITED', targetId: cmd.targetId, targetName: name, changes: plan.changes.length });
-  }
+  const plan = planGodEdit(draft, cmd.targetId, cmd.patch, ctx.content);
+  if (!plan.ok) return fail('INVALID_COMMAND', plan.issues.join('; '));
+  if (plan.changes.length === 0) return { ok: true, state, events: [], checkpoint: null, duplicate: true }; // already as requested
+  applyGodPatch(draft, cmd.targetId, cmd.patch);
+  const who = cmd.targetId === draft.protagonist.id ? draft.protagonist : draft.npcs[cmd.targetId];
+  const name = `${who?.givenName ?? ''} ${who?.familyName ?? ''}`.trim();
+  draft.godMode.edits += 1;
+  pushGodLog(draft, { revision: rev, year: draft.world.currentDate.year, action: 'EDITED', targetId: cmd.targetId, targetName: name, changes: plan.changes });
+  emit(run, 'GOD', { action: 'EDITED', targetId: cmd.targetId, targetName: name, changes: plan.changes.length });
   updateAchievements(run);
   draft.revision = rev;
   draft.lastCommandId = cmd.commandId;

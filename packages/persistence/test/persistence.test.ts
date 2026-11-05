@@ -250,3 +250,31 @@ describe('sync support', () => {
     await expect(adoptSave(other, '{"format":"x"}')).rejects.toThrow(/not a PROJECT LIFE save/);
   });
 });
+
+describe('GOD MODE choice and the integrity of imports (T71)', () => {
+  it('the choice survives save, load, export and import unchanged', async () => {
+    const r = createGame({ seed: 'god-persist', givenName: 'Ada', familyName: 'Verdi', startDate: { year: 2025, month: 1, day: 10 }, godModeEnabled: true, initialGodPatch: { stats: { appearance: 90 } } }, ctx);
+    if (!r.ok) throw new Error(r.error.message);
+    await commit(db, { state: r.state, events: r.events, checkpoint: r.checkpoint });
+    const loaded = await load(db, r.state.id);
+    expect(loaded.ok && loaded.state.config).toEqual({ godModeEnabled: true, godModeOrigin: 'chosen' });
+    const text = await exportSave(db, r.state.id);
+    const other = new ProjectLifeDb(`test-god-${n++}`);
+    await importSave(other, text);
+    const again = await load(other, r.state.id);
+    expect(again.ok && again.state.config.godModeEnabled).toBe(true);
+    expect(again.ok && again.state.godMode.edits).toBe(1);
+  });
+
+  it('refuses a save that was edited to claim it never had GOD MODE although it shows activity', async () => {
+    const r = createGame({ seed: 'god-forge', givenName: 'Ada', familyName: 'Verdi', startDate: { year: 2025, month: 1, day: 10 }, godModeEnabled: true, initialGodPatch: { stats: { appearance: 90 } } }, ctx);
+    if (!r.ok) throw new Error(r.error.message);
+    await commit(db, { state: r.state, events: r.events, checkpoint: r.checkpoint });
+    const parsed = JSON.parse(await exportSave(db, r.state.id));
+    parsed.slot.state.config.godModeEnabled = false;
+    parsed.slot.checksum = stateChecksum(parsed.slot.state); // even with a consistent checksum
+    const target = new ProjectLifeDb(`test-forge-${n++}`);
+    await expect(importSave(target, JSON.stringify(parsed))).rejects.toThrow(/GOD MODE activity/);
+    expect(await target.saves.count()).toBe(0);
+  });
+});

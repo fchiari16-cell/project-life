@@ -41,6 +41,7 @@ export default defineConfig({
         // Separate long-lived chunks (framework, game content) so an app update re-downloads only what changed.
         advancedChunks: {
           groups: [
+            { name: 'ui', test: /node_modules.(@radix-ui|react-router|lucide-react)/ },
             { name: 'vendor', test: /node_modules/ },
             { name: 'content', test: /packages.content/ },
           ],

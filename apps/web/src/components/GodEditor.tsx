@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { contentBundle } from '@project-life/content';
-import { godTarget, planGodEdit } from '@project-life/engine';
-import { GodPatchSchema, STAT_KEYS, TRAIT_KEYS, type GodPatch } from '@project-life/schemas';
+import { godTarget, planGodEdit, type GodPlan } from '@project-life/engine';
+import { GodPatchSchema, STAT_KEYS, TRAIT_KEYS, type GameState, type GodPatch } from '@project-life/schemas';
 import { Button } from './ui/button';
 import { useGame } from '../game/store';
 import { t } from '../i18n/it';
@@ -44,76 +44,78 @@ function pathLabel(path: string): string {
 
 const talentTitle = (id: string): string => contentBundle.talents.find((x) => x.id === id)?.title ?? id;
 
+export interface GodDraft {
+  patch: GodPatch;
+  /** True when the patch passes the strict schema and the engine's own plan (the same checks the command runs). */
+  valid: boolean;
+  plan: GodPlan | null;
+}
+
 /**
- * Edit → preview → confirm. The preview is the engine's own plan (same validation the command runs), so what
- * is shown is exactly what will be saved; nothing is written until "Conferma e salva".
+ * The editable fields of a character plus the engine's preview of exactly what would change. It never writes
+ * anything: it reports the draft upward (`onDraft`). Used both for editing a living character and, at life
+ * creation, for customising the newborn before the choice is confirmed.
  */
-export function GodEditor({ targetId, onClose }: { targetId: string; onClose(): void }) {
-  const game = useGame((s) => s.game);
-  const busy = useGame((s) => s.busy);
-  const godEdit = useGame((s) => s.godEdit);
-  const target = game ? godTarget(game, targetId) : null;
+export function GodFields({ game, targetId, onDraft, hideIdentity = false }: { game: GameState; targetId: string; onDraft(d: GodDraft): void; hideIdentity?: boolean }) {
+  // godTarget() builds a new wrapper object on every call, so only its stable parts (kind, ref) are used below.
+  const target = godTarget(game, targetId);
   const ref = target?.ref;
-  const isPlayer = target?.kind === 'protagonist';
+  const kind = target?.kind;
+  const isPlayer = kind === 'protagonist';
 
   const [given, setGiven] = useState(ref?.givenName ?? '');
   const [family, setFamily] = useState(ref?.familyName ?? '');
-  const [stats, setStats] = useState<Draft>({ ...(isPlayer ? (target.ref.stats as Draft) : {}) });
+  const [stats, setStats] = useState<Draft>({ ...(ref && 'stats' in ref ? (ref.stats as Draft) : {}) });
   const [traits, setTraits] = useState<Draft>({ ...(ref?.traits as Draft | undefined) });
   const [pred, setPred] = useState<Draft>({ ...(ref?.predispositions as Draft | undefined) });
-  const [skills, setSkills] = useState<Draft>({ ...(isPlayer ? (target.ref.skills as Draft) : {}) });
+  const [skills, setSkills] = useState<Draft>({ ...(ref && 'skills' in ref ? (ref.skills as Draft) : {}) });
   const [talents, setTalents] = useState<string[]>([...(ref?.talents ?? [])]);
 
-  const patch = useMemo((): GodPatch => {
-    if (!ref || !target) return {};
-    const diff = (draft: Draft, base: Record<string, number>): Draft => Object.fromEntries(Object.entries(draft).filter(([k, v]) => v !== base[k]));
+  const draft = useMemo((): GodDraft => {
+    if (!ref || !kind) return { patch: {}, valid: false, plan: null };
+    const diff = (d: Draft, base: Record<string, number>): Draft => Object.fromEntries(Object.entries(d).filter(([k, v]) => v !== base[k]));
     const p: Record<string, unknown> = {};
-    if (given !== ref.givenName) p.givenName = given;
-    if (family !== ref.familyName) p.familyName = family;
+    if (!hideIdentity && given !== ref.givenName) p.givenName = given;
+    if (!hideIdentity && family !== ref.familyName) p.familyName = family;
     const tr = diff(traits, ref.traits as unknown as Record<string, number>);
     if (Object.keys(tr).length) p.traits = tr;
     const pr = diff(pred, ref.predispositions as unknown as Record<string, number>);
     if (Object.keys(pr).length) p.predispositions = pr;
-    if (target.kind === 'protagonist') {
-      const st = diff(stats, target.ref.stats as unknown as Record<string, number>);
+    if (kind === 'protagonist' && 'stats' in ref) {
+      const st = diff(stats, ref.stats as unknown as Record<string, number>);
       if (Object.keys(st).length) p.stats = st;
-      const sk = diff(skills, target.ref.skills as unknown as Record<string, number>);
+      const sk = diff(skills, ref.skills as unknown as Record<string, number>);
       if (Object.keys(sk).length) p.skills = sk;
     }
     if ([...talents].sort().join() !== [...ref.talents].sort().join()) p.talents = talents;
-    return p as GodPatch;
-  }, [ref, target, given, family, traits, pred, stats, skills, talents]);
+    const patch = p as GodPatch;
+    if (!GodPatchSchema.safeParse(patch).success) return { patch, valid: false, plan: null };
+    const plan = planGodEdit(game, targetId, patch, contentBundle);
+    return { patch, valid: plan.ok, plan };
+  }, [game, targetId, ref, kind, hideIdentity, given, family, traits, pred, stats, skills, talents]);
 
-  if (!game || !ref || !target) return null;
-  const schemaOk = GodPatchSchema.safeParse(patch).success;
-  const plan = schemaOk ? planGodEdit(game, targetId, patch, contentBundle) : null;
-  const canSave = !busy && plan !== null && plan.ok && plan.changes.length > 0;
+  useEffect(() => onDraft(draft), [draft, onDraft]);
+
+  if (!ref || !target) return null;
+  const { plan } = draft;
   const fieldClass = 'block min-h-11 w-full rounded-lg border border-border bg-card px-3 text-base';
   const legend = 'mb-2 text-sm font-bold';
 
   return (
-    <form
-      aria-label={t.god.editTitle(`${ref.givenName} ${ref.familyName}`)}
-      className="mt-4 grid gap-5 rounded-xl border-2 border-primary bg-card p-4"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (!canSave) return;
-        void godEdit(targetId, patch).then((ok) => ok && onClose());
-      }}
-    >
-      <h3 className="text-lg font-bold">{t.god.editTitle(`${ref.givenName} ${ref.familyName}`)}</h3>
-
-      <fieldset className="grid gap-3 sm:grid-cols-2">
-        <legend className={legend}>{t.god.identity}</legend>
-        <label className="text-sm">
-          {t.life.givenName}
-          <input className={fieldClass} value={given} maxLength={64} onChange={(e) => setGiven(e.target.value)} />
-        </label>
-        <label className="text-sm">
-          {t.life.familyName}
-          <input className={fieldClass} value={family} maxLength={64} onChange={(e) => setFamily(e.target.value)} />
-        </label>
-      </fieldset>
+    <div className="grid gap-5">
+      {!hideIdentity && (
+        <fieldset className="grid gap-3 sm:grid-cols-2">
+          <legend className={legend}>{t.god.identity}</legend>
+          <label className="text-sm">
+            {t.life.givenName}
+            <input className={fieldClass} value={given} maxLength={64} onChange={(e) => setGiven(e.target.value)} />
+          </label>
+          <label className="text-sm">
+            {t.life.familyName}
+            <input className={fieldClass} value={family} maxLength={64} onChange={(e) => setFamily(e.target.value)} />
+          </label>
+        </fieldset>
+      )}
 
       {isPlayer ? (
         <fieldset className="grid gap-1">
@@ -174,7 +176,7 @@ export function GodEditor({ targetId, onClose }: { targetId: string; onClose(): 
 
       <section aria-live="polite" aria-label={t.god.preview}>
         <h4 className={legend}>{t.god.preview}</h4>
-        {!schemaOk ? (
+        {!plan && !draft.valid && Object.keys(draft.patch).length > 0 ? (
           <p role="alert" className="text-sm text-danger">
             {t.errors.generic}
           </p>
@@ -196,7 +198,36 @@ export function GodEditor({ targetId, onClose }: { targetId: string; onClose(): 
           <p className="text-sm text-muted-foreground">{t.god.noChanges}</p>
         )}
       </section>
+    </div>
+  );
+}
 
+/**
+ * Edit → preview → confirm for a living character of the open life. Only reachable when the life was created
+ * with GOD MODE; the command itself refuses otherwise.
+ */
+export function GodEditor({ targetId, onClose }: { targetId: string; onClose(): void }) {
+  const game = useGame((s) => s.game);
+  const busy = useGame((s) => s.busy);
+  const godEdit = useGame((s) => s.godEdit);
+  const [draft, setDraft] = useState<GodDraft>({ patch: {}, valid: false, plan: null });
+  const target = game ? godTarget(game, targetId) : null;
+  if (!game || !target) return null;
+  const name = `${target.ref.givenName} ${target.ref.familyName}`;
+  const canSave = !busy && draft.valid && (draft.plan?.changes.length ?? 0) > 0;
+
+  return (
+    <form
+      aria-label={t.god.editTitle(name)}
+      className="mt-4 grid gap-5 rounded-xl border-2 border-primary bg-card p-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (!canSave) return;
+        void godEdit(targetId, draft.patch).then((ok) => ok && onClose());
+      }}
+    >
+      <h3 className="text-lg font-bold">{t.god.editTitle(name)}</h3>
+      <GodFields game={game} targetId={targetId} onDraft={setDraft} />
       <div className="flex flex-wrap gap-3">
         <Button type="submit" disabled={!canSave}>
           {t.god.confirm}

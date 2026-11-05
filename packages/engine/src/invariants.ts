@@ -20,6 +20,8 @@ export function validateState(input: unknown): string[] {
 /** Cross-field rules for a state that already passed the schema. */
 export function invariantIssues(s: GameState): string[] {
   const issues: string[] = [];
+  // GOD MODE is fixed at creation: a life that shows any GOD MODE activity must have been created with it.
+  if (!s.config.godModeEnabled && (s.godMode.edits > 0 || s.godMode.log.length > 0)) issues.push('GOD MODE activity recorded in a life created without GOD MODE');
   if (monthIndex(s.world.currentDate) < monthIndex(s.world.startDate)) {
     issues.push('world.currentDate precedes world.startDate');
   }

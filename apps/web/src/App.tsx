@@ -6,6 +6,8 @@ import { CareerPage } from './pages/CareerPage';
 import { FinancePage } from './pages/FinancePage';
 import { LifePage } from './pages/LifePage';
 import { MorePage } from './pages/MorePage';
+import { NewLifePage } from './pages/NewLifePage';
+import { ProfilePage } from './pages/ProfilePage';
 import { RelationshipsPage } from './pages/RelationshipsPage';
 import { SocietyPage } from './pages/SocietyPage';
 import { WorldPage } from './pages/WorldPage';
@@ -29,6 +31,8 @@ export function App() {
             <Route path="carriera" element={<CareerPage />} />
             <Route path="finanze" element={<FinancePage />} />
             <Route path="altro" element={<MorePage />} />
+            <Route path="profilo" element={<ProfilePage />} />
+            <Route path="nuova-vita" element={<NewLifePage />} />
             <Route path="mondo" element={<WorldPage />} />
             <Route path="societa" element={<SocietyPage />} />
             <Route path="*" element={<LifePage />} />

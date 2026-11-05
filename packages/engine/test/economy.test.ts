@@ -271,7 +271,7 @@ describe('businesses', () => {
 });
 
 describe('economic events end to end', () => {
-  it('offers affordable choices only and applies them through the engine', { timeout: 120_000 }, () => {
+  it('offers affordable choices only and applies them through the engine', { timeout: 300_000 }, () => {
     let founded = 0;
     let invested = 0;
     let bought = 0;

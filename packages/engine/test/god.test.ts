@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { EngineCommandSchema, SCHEMA_VERSION, type GameState, type GodPatch } from '@project-life/schemas';
-import { ACHIEVEMENT_IDS, canonicalStringify, continueDynasty, dynastyOptions, migrateSlot, monthlyDeathChance, pendingChoices, planGodEdit, simulate, validateState } from '../src/index';
-import { autoPlay, ctx, newLife } from './helpers';
+import { EngineCommandSchema, SCHEMA_VERSION, SUPPORTED_BIRTH_YEARS, type GameState, type GodPatch } from '@project-life/schemas';
+import { ACHIEVEMENT_IDS, canonicalStringify, continueDynasty, createGame, dynastyOptions, migrateSlot, monthlyDeathChance, planGodEdit, simulate, validateState } from '../src/index';
+import { autoPlay, ctx, newLife, START } from './helpers';
 
 let n = 0;
 const cmd = <T extends object>(c: T) => ({ commandId: `g${n++}`, ...c });
@@ -11,42 +11,73 @@ const must = (r: ReturnType<typeof simulate>): GameState => {
   if (!r.ok) throw new Error(r.error.message);
   return r.state;
 };
-const strip = (s: GameState): string => canonicalStringify({ ...s, revision: 0, godMode: null, lastCommandId: null });
+const godLife = (seed: string, extra: Parameters<typeof newLife>[1] = {}): GameState => newLife(seed, { godModeEnabled: true, ...extra });
+/** Everything except the fixed choice itself, so a GOD life and a normal life can be compared. */
+const strip = (s: GameState): string => canonicalStringify({ ...s, revision: 0, config: null, godMode: null, lastCommandId: null });
 
-describe('GOD MODE: switching', () => {
-  it('can be switched on and off at any moment the simulation allows, and the log records it', () => {
-    let s = newLife('god-toggle');
-    expect(s.godMode.enabled).toBe(false);
-    s = must(toggle(s, true));
-    expect(s.godMode.enabled).toBe(true);
-    // also while an event is waiting for a decision
-    for (let i = 0; i < 30 && s.simulation.status !== 'PAUSED_EVENT'; i++) s = must(simulate(s, cmd({ type: 'ADVANCE_YEAR', expectedRevision: s.revision }), ctx));
-    expect(s.simulation.status).toBe('PAUSED_EVENT');
-    s = must(toggle(s, false));
-    expect(s.godMode.enabled).toBe(false);
-    s = must(toggle(s, true));
-    expect(s.godMode.log.map((l) => l.action)).toEqual(['ENABLED', 'DISABLED', 'ENABLED']);
-    expect(s.simulation.status).toBe('PAUSED_EVENT'); // the pending decision is untouched
-    expect(validateState(s)).toEqual([]);
+describe('GOD MODE is chosen when the life is created, and then locked', () => {
+  it('is off unless chosen; the choice is stored in the state', () => {
+    expect(newLife('god-default').config).toEqual({ godModeEnabled: false, godModeOrigin: 'chosen' });
+    expect(godLife('god-on').config).toEqual({ godModeEnabled: true, godModeOrigin: 'chosen' });
+    expect(godLife('god-on').godMode).toEqual({ edits: 0, log: [] });
   });
 
-  it('switching to the state it is already in is a no-op', () => {
-    const s = newLife('god-noop');
-    const r = toggle(s, false);
-    expect(r.ok && r.duplicate).toBe(true);
-    expect(r.ok && r.state).toEqual(s);
+  it('cannot be switched by any command, in either direction, and nothing changes', () => {
+    for (const s of [newLife('lock-off'), godLife('lock-on')]) {
+      const before = canonicalStringify(s);
+      for (const enabled of [true, false]) {
+        const r = toggle(s, enabled);
+        expect(r.ok).toBe(false);
+        expect(!r.ok && r.error.code).toBe('INVALID_TRANSITION');
+        expect(!r.ok && r.error.message).toMatch(/created/);
+      }
+      expect(canonicalStringify(s)).toBe(before);
+    }
   });
 
-  it('enabling it without editing anything changes nothing about how a life unfolds', () => {
+  it('is not reachable through game actions: playing, deciding and editing never change it', () => {
+    for (const startOn of [false, true]) {
+      const start = startOn ? godLife('lock-play') : newLife('lock-play');
+      const played = autoPlay(start, 'lock', 600).state;
+      expect(played.config).toEqual(start.config);
+    }
+    const s = godLife('lock-edit');
+    const edited = must(edit(s, s.protagonist.id, { givenName: 'Nova' }));
+    expect(edited.config).toEqual(s.config);
+  });
+
+  it('no command or GOD MODE patch can carry the choice', () => {
+    const s = godLife('lock-schema');
+    for (const patch of [{ godModeEnabled: false }, { config: { godModeEnabled: false } }, { godMode: { edits: 0, log: [] } }]) {
+      expect(EngineCommandSchema.safeParse({ type: 'GOD_EDIT', commandId: 'x', expectedRevision: 0, targetId: s.protagonist.id, patch }).success, JSON.stringify(patch)).toBe(false);
+      expect(edit(s, s.protagonist.id, patch).ok).toBe(false);
+    }
+  });
+
+  it('a state that shows GOD MODE activity but says it was never chosen is invalid (checked on import and migration)', () => {
+    const s = godLife('lock-forged');
+    const edited = must(edit(s, s.protagonist.id, { givenName: 'Nova' }));
+    expect(validateState(edited)).toEqual([]);
+    const forged = structuredClone(edited);
+    forged.config.godModeEnabled = false;
+    expect(validateState(forged).join(' ')).toMatch(/GOD MODE activity recorded in a life created without GOD MODE/);
+  });
+
+  it('choosing GOD MODE without using it changes nothing about how a life unfolds', () => {
     const plain = autoPlay(newLife('god-neutral'), 'p', 600).state;
-    const withGod = autoPlay(must(toggle(newLife('god-neutral'), true)), 'p', 600).state;
+    const withGod = autoPlay(godLife('god-neutral'), 'p', 600).state;
     expect(strip(withGod)).toBe(strip(plain));
-    expect(withGod.achievements).toEqual(plain.achievements); // achievements are not disabled
+    expect(withGod.achievements).toEqual(plain.achievements); // achievements are shared
+  });
+
+  it('a life without GOD MODE cannot be edited', () => {
+    const s = newLife('god-off');
+    const r = edit(s, s.protagonist.id, { givenName: 'X' });
+    expect(r).toMatchObject({ ok: false, error: { code: 'INVALID_TRANSITION' } });
   });
 });
 
-describe('GOD MODE: editing the protagonist', () => {
-  const on = (): GameState => must(toggle(newLife('god-edit'), true));
+describe('GOD MODE: editing the protagonist (only when chosen at creation)', () => {
   const patch: GodPatch = {
     givenName: 'Nova',
     familyName: 'Rossi',
@@ -58,7 +89,7 @@ describe('GOD MODE: editing the protagonist', () => {
   };
 
   it('applies exactly the requested changes, atomically, with a log entry and a checkpoint', () => {
-    const s = on();
+    const s = godLife('god-edit');
     const r = edit(s, s.protagonist.id, patch);
     if (!r.ok) throw new Error(r.error.message);
     const p = r.state.protagonist;
@@ -81,8 +112,17 @@ describe('GOD MODE: editing the protagonist', () => {
     expect(validateState(r.state)).toEqual([]);
   });
 
+  it('works while a decision is pending', () => {
+    let s = godLife('god-pending');
+    for (let i = 0; i < 30 && s.simulation.status !== 'PAUSED_EVENT'; i++) s = must(simulate(s, cmd({ type: 'ADVANCE_YEAR', expectedRevision: s.revision }), ctx));
+    expect(s.simulation.status).toBe('PAUSED_EVENT');
+    const after = must(edit(s, s.protagonist.id, { stats: { fitness: 60 } }));
+    expect(after.simulation.status).toBe('PAUSED_EVENT');
+    expect(after.simulation.pending).toEqual(s.simulation.pending);
+  });
+
   it('the preview shows the same changes the command then applies, and changes nothing itself', () => {
-    const s = on();
+    const s = godLife('god-preview');
     const before = canonicalStringify(s);
     const plan = planGodEdit(s, s.protagonist.id, patch, ctx.content);
     expect(canonicalStringify(s)).toBe(before);
@@ -92,7 +132,7 @@ describe('GOD MODE: editing the protagonist', () => {
   });
 
   it('is idempotent: the same command id is ignored, and re-applying the same values is a no-op', () => {
-    const s = on();
+    const s = godLife('god-idem');
     const c = cmd({ type: 'GOD_EDIT', expectedRevision: s.revision, targetId: s.protagonist.id, patch });
     const first = simulate(s, c, ctx);
     if (!first.ok) throw new Error(first.error.message);
@@ -105,7 +145,7 @@ describe('GOD MODE: editing the protagonist', () => {
   });
 
   it('is rejected as a whole when any part is invalid (no partial edits)', () => {
-    const s = on();
+    const s = godLife('god-atomic');
     const before = canonicalStringify(s);
     for (const bad of [
       { stats: { health: 50 }, talents: ['unknown_talent'] },
@@ -117,14 +157,13 @@ describe('GOD MODE: editing the protagonist', () => {
       { givenName: 'x'.repeat(65) },
       { talents: ['academic', 'athletic', 'musical', 'artistic', 'mathematical', 'linguistic'] },
     ]) {
-      const r = edit(s, s.protagonist.id, bad);
-      expect(r.ok, JSON.stringify(bad)).toBe(false);
+      expect(edit(s, s.protagonist.id, bad).ok, JSON.stringify(bad)).toBe(false);
     }
     expect(canonicalStringify(s)).toBe(before);
   });
 
   it('refuses everything outside its scope: money, career, degrees, world, laws, future events, genealogy, history, relationships', () => {
-    const s = on();
+    const s = godLife('god-scope');
     const forbidden = [
       { cash: 1_000_000 }, { finance: { accounts: {} } }, { career: { job: null } }, { job: 'surgeon' }, { qualifications: ['doctorate'] },
       { education: { stage: 'finished' } }, { properties: {} }, { businesses: {} }, { world: { priceIndex: 1 } }, { laws: [] },
@@ -133,47 +172,87 @@ describe('GOD MODE: editing the protagonist', () => {
       { stats: { money: 5 } }, { traits: { luck: 99 } },
     ];
     const before = canonicalStringify(s);
-    for (const patch of forbidden) {
-      // rejected by the command schema itself, before it ever reaches the engine
-      expect(EngineCommandSchema.safeParse({ type: 'GOD_EDIT', commandId: 'x', expectedRevision: s.revision, targetId: s.protagonist.id, patch }).success, JSON.stringify(patch)).toBe(false);
-      expect(edit(s, s.protagonist.id, patch).ok, JSON.stringify(patch)).toBe(false);
+    for (const bad of forbidden) {
+      expect(EngineCommandSchema.safeParse({ type: 'GOD_EDIT', commandId: 'x', expectedRevision: s.revision, targetId: s.protagonist.id, patch: bad }).success, JSON.stringify(bad)).toBe(false);
+      expect(edit(s, s.protagonist.id, bad).ok, JSON.stringify(bad)).toBe(false);
     }
     expect(canonicalStringify(s)).toBe(before);
   });
 
-  it('cannot be used while it is switched off, nor on the dead or on strangers', () => {
-    const off = newLife('god-off');
-    expect(edit(off, off.protagonist.id, { givenName: 'X' })).toMatchObject({ ok: false, error: { code: 'INVALID_TRANSITION' } });
-    const s = must(toggle(off, true));
+  it('cannot target strangers or the dead', () => {
+    const s = godLife('god-targets');
     expect(edit(s, 'nobody', { givenName: 'X' })).toMatchObject({ ok: false });
-    const dead = autoPlay(must(toggle(newLife('god-dead'), true)), 'd', 600).state;
+    const dead = autoPlay(godLife('god-dead'), 'd', 600).state;
     expect(edit(dead, dead.protagonist.id, { givenName: 'X' }).ok).toBe(false);
   });
 
-  it('switching it off keeps the edits', () => {
-    let s = on();
-    s = must(edit(s, s.protagonist.id, { givenName: 'Kept', stats: { fitness: 77 } }));
-    s = must(toggle(s, false));
-    expect(s.protagonist.givenName).toBe('Kept');
-    expect(s.protagonist.stats.fitness).toBe(77);
-    expect(s.godMode.log.map((l) => l.action)).toEqual(['ENABLED', 'EDITED', 'DISABLED']);
-  });
-
-  it('edited predispositions and talents really change the simulation (they are not decoration)', () => {
+  it('edited predispositions really change the simulation (they are not decoration)', () => {
     const lo = monthlyDeathChance(70, 50, 0);
     const mid = monthlyDeathChance(70, 50, 50);
     const hi = monthlyDeathChance(70, 50, 100);
     expect(lo).toBeGreaterThan(mid);
     expect(mid).toBeGreaterThan(hi);
     expect(lo / hi).toBeCloseTo(1.2 / 0.8, 5);
-    const talent = ctx.content.talents.find((t) => t.academic)!;
-    expect(talent).toBeDefined();
+    expect(ctx.content.talents.find((t) => t.academic)).toBeDefined();
+  });
+});
+
+describe('GOD MODE: customising the character as part of the creation', () => {
+  const patch: GodPatch = { givenName: 'Nova', stats: { appearance: 90 }, talents: ['musical'], traits: { curiosity: 80 } };
+  const params = { seed: 'create-god', givenName: 'Ada', familyName: 'Verdi', startDate: START };
+
+  it('is applied atomically at revision 0, recorded in the log, with a GOD event', () => {
+    const r = createGame({ ...params, godModeEnabled: true, initialGodPatch: patch }, ctx);
+    if (!r.ok) throw new Error(r.error.message);
+    const p = r.state.protagonist;
+    expect([p.givenName, p.familyName, p.stats.appearance, p.talents, p.traits.curiosity]).toEqual(['Nova', 'Verdi', 90, ['musical'], 80]);
+    expect(r.state.revision).toBe(0);
+    expect(r.state.godMode.edits).toBe(1);
+    expect(r.state.godMode.log).toHaveLength(1);
+    expect(r.state.godMode.log[0]).toMatchObject({ revision: 0, action: 'EDITED' });
+    expect(r.events.map((e) => e.type)).toEqual(['LIFE_CREATED', 'GOD']);
+    expect(validateState(r.state)).toEqual([]);
+  });
+
+  it('the character before customising is exactly what the creation screen previews (same seed, same draw)', () => {
+    const base = createGame({ ...params, godModeEnabled: true }, ctx);
+    const custom = createGame({ ...params, godModeEnabled: true, initialGodPatch: { stats: { appearance: 90 } } }, ctx);
+    if (!base.ok || !custom.ok) throw new Error('create failed');
+    expect(custom.state.rng).toEqual(base.state.rng); // the customisation never touches the random stream
+    expect(custom.state.protagonist.stats.intelligence).toBe(base.state.protagonist.stats.intelligence);
+    expect(custom.state.protagonist.traits).toEqual(base.state.protagonist.traits);
+    expect(custom.state.npcs).toEqual(base.state.npcs);
+    expect(custom.state.family).toEqual(base.state.family);
+  });
+
+  it('is refused without GOD MODE, and an invalid customisation refuses the whole creation', () => {
+    expect(createGame({ ...params, initialGodPatch: patch }, ctx)).toMatchObject({ ok: false, error: { code: 'INVALID_COMMAND' } });
+    expect(createGame({ ...params, godModeEnabled: false, initialGodPatch: patch }, ctx).ok).toBe(false);
+    for (const bad of [{ talents: ['nope'] }, { stats: { health: 400 } }, { cash: 5 }, { parentIds: [] }]) {
+      expect(createGame({ ...params, godModeEnabled: true, initialGodPatch: bad as GodPatch }, ctx).ok, JSON.stringify(bad)).toBe(false);
+    }
+  });
+
+  it('never allows free wealth or a different family: those are not part of the patch', () => {
+    for (const bad of [{ finance: { accounts: {} } }, { family: { class: 'high' } }, { money: 1_000_000 }]) {
+      expect(createGame({ ...params, godModeEnabled: true, initialGodPatch: bad as GodPatch }, ctx).ok, JSON.stringify(bad)).toBe(false);
+    }
+  });
+});
+
+describe('birth date of a new life', () => {
+  it('must be inside the supported contemporary window', () => {
+    const base = { seed: 'date', givenName: 'A', familyName: 'B' };
+    const at = (year: number) => createGame({ ...base, startDate: { year, month: 6, day: 1 } }, ctx);
+    expect(at(SUPPORTED_BIRTH_YEARS.min).ok).toBe(true);
+    expect(at(SUPPORTED_BIRTH_YEARS.min - 1).ok).toBe(false);
+    expect(at(SUPPORTED_BIRTH_YEARS.max + 1).ok).toBe(false);
   });
 });
 
 describe('GOD MODE: editing NPCs', () => {
   it('edits names, traits, predispositions and talents but keeps memory, relationships and autonomy; stats and skills do not exist for NPCs', () => {
-    let s = must(toggle(newLife('god-npc'), true));
+    let s = godLife('god-npc');
     const id = s.protagonist.parentIds[0]!;
     const before = structuredClone(s.npcs[id]!);
     const rel = structuredClone(s.relationships[`${s.protagonist.id}>${id}`]);
@@ -188,41 +267,135 @@ describe('GOD MODE: editing NPCs', () => {
     expect(s.relationships[`${s.protagonist.id}>${id}`]).toEqual(rel);
     expect(edit(s, id, { stats: { health: 10 } }).ok).toBe(false);
     expect(edit(s, id, { skills: { social: 10 } }).ok).toBe(false);
-    // the NPC keeps living its own life afterwards
     const played = autoPlay(s, 'npc-life', 600);
     expect(validateState(played.state)).toEqual([]);
     expect(played.state.npcs[id]?.givenName ?? 'Edited').toBe('Edited');
   });
 });
 
-describe('achievements are shared with GOD MODE', () => {
-  it('unlock in both modes, only ever grow, and are carried across generations', () => {
+describe('dynasty: the choice is asked again for every life', () => {
+  const dieAndContinue = (godFirst: boolean, next: { godModeEnabled?: boolean; initialGodPatch?: GodPatch }, seed: string) => {
+    const dead = autoPlay(godFirst ? godLife(seed) : newLife(seed), 'dyn', 600).state;
+    const opts = dynastyOptions(dead);
+    const r = continueDynasty(dead, { seed: `next-${seed}`, givenName: 'Nova', parentId: opts[0]?.npcId ?? null, ...next }, ctx);
+    if (!r.ok) throw new Error(r.error.message);
+    return { dead, next: r };
+  };
+
+  it('is not inherited: a life played with GOD MODE is followed by a life without it unless chosen again', () => {
+    const { dead, next } = dieAndContinue(true, {}, 'dyn-a');
+    expect(dead.config.godModeEnabled).toBe(true);
+    expect(next.state.config).toEqual({ godModeEnabled: false, godModeOrigin: 'chosen' });
+    expect(next.state.godMode).toEqual({ edits: 0, log: [] }); // the log belongs to the life it was written in
+    expect(edit(next.state, next.state.protagonist.id, { givenName: 'X' }).ok).toBe(false);
+  });
+
+  it('can be chosen for the new life even if the previous one had none, and the chronicle records the previous choice', () => {
+    const a = dieAndContinue(false, { godModeEnabled: true }, 'dyn-b');
+    expect(a.next.state.config.godModeEnabled).toBe(true);
+    expect(a.next.state.dynasty.chronicle.at(-1)?.godMode).toBe(false);
+    const b = dieAndContinue(true, { godModeEnabled: true }, 'dyn-c');
+    expect(b.next.state.dynasty.chronicle.at(-1)?.godMode).toBe(true);
+  });
+
+  it('customises the new life at creation, only when GOD MODE is chosen for it', () => {
+    const ok = dieAndContinue(false, { godModeEnabled: true, initialGodPatch: { stats: { appearance: 77 } } }, 'dyn-d');
+    expect(ok.next.state.protagonist.stats.appearance).toBe(77);
+    expect(ok.next.state.godMode.edits).toBe(1);
+    const dead = autoPlay(newLife('dyn-e'), 'dyn', 600).state;
+    const refused = continueDynasty(dead, { seed: 'x', givenName: 'Nova', initialGodPatch: { stats: { appearance: 77 } } }, ctx);
+    expect(refused.ok).toBe(false);
+  });
+
+  it('achievements stay shared across the dynasty and across modes', () => {
     expect(new Set(ACHIEVEMENT_IDS).size).toBe(ACHIEVEMENT_IDS.length);
-    let unlockedWithGod = 0;
     let carried = false;
     for (let i = 0; i < 12 && !carried; i++) {
-      const s0 = must(toggle(newLife(`ach-${i}`), true));
+      const s0 = godLife(`ach-${i}`);
       const edited = must(edit(s0, s0.protagonist.id, { stats: { happiness: 100 } }));
       const dead = autoPlay(edited, `a${i}`, 600, ['ask_out', 'propose', 'try']).state;
-      unlockedWithGod += Object.keys(dead.achievements).length;
       const opts = dynastyOptions(dead);
       if (opts.length === 0) continue;
       const r = continueDynasty(dead, { seed: `next-${i}`, givenName: 'Nova', parentId: opts[0]!.npcId }, ctx);
       if (!r.ok) throw new Error(r.error.message);
       for (const id of Object.keys(dead.achievements)) expect(r.state.achievements[id]).toBe(dead.achievements[id]);
-      expect(r.state.godMode.enabled).toBe(true); // the dynasty keeps its settings and log
       carried = true;
     }
-    expect(unlockedWithGod).toBeGreaterThan(0);
     expect(carried).toBe(true);
   });
 });
 
-describe('migration v6 → v7', () => {
-  it('adds neutral talents, skills, predispositions, a switched-off GOD MODE and empty achievements', () => {
+describe('migration v7 → v8: the choice is derived from what the save proves, never invented', () => {
+  /** A save as schema v7 stored it: a switch plus a log, and no `config`. */
+  function asV7(s: GameState, god: { enabled: boolean; edits: number; log: unknown[] }): Record<string, unknown> {
+    const raw = structuredClone(s) as unknown as Record<string, unknown>;
+    raw.schemaVersion = 7;
+    delete raw.config;
+    raw.godMode = god;
+    return raw;
+  }
+  const migrate = (raw: Record<string, unknown>): GameState => {
+    const res = migrateSlot({ schemaVersion: 7, state: raw, rng: raw.rng, checksum: 'x' } as never, ctx.content)!;
+    expect(res.from).toBe(7);
+    return (res.slot as { state: GameState }).state;
+  };
+  const entry = (action: 'ENABLED' | 'DISABLED' | 'EDITED') => ({ revision: 1, year: 2025, action, targetId: null, targetName: null, changes: [] });
+
+  it('no GOD MODE activity in the save → off, locked, and marked as derived', () => {
+    const m = migrate(asV7(newLife('mig-none'), { enabled: false, edits: 0, log: [] }));
+    expect(m.config).toEqual({ godModeEnabled: false, godModeOrigin: 'migrated-no-usage' });
+    expect(m.godMode).toEqual({ edits: 0, log: [] });
+    expect(validateState(m)).toEqual([]);
+    expect(edit(m, m.protagonist.id, { givenName: 'X' }).ok).toBe(false);
+  });
+
+  it('an activation in the log → on, locked (even if it was switched off again later)', () => {
+    const m = migrate(asV7(newLife('mig-toggled'), { enabled: false, edits: 0, log: [entry('ENABLED'), entry('DISABLED')] }));
+    expect(m.config).toEqual({ godModeEnabled: true, godModeOrigin: 'migrated-from-usage' });
+    expect(m.godMode.log).toHaveLength(2); // the history is kept
+    expect(validateState(m)).toEqual([]);
+    expect(edit(m, m.protagonist.id, { givenName: 'X' }).ok).toBe(true);
+    expect(toggle(m, false).ok).toBe(false);
+  });
+
+  it('recorded edits → on, locked', () => {
+    const m = migrate(asV7(newLife('mig-edited'), { enabled: true, edits: 2, log: [entry('ENABLED'), entry('EDITED'), entry('EDITED')] }));
+    expect(m.config.godModeEnabled).toBe(true);
+    expect(m.godMode.edits).toBe(2);
+    expect(validateState(m)).toEqual([]);
+  });
+
+  it('a switch that says "on" with no trace of use does not by itself prove anything', () => {
+    const m = migrate(asV7(newLife('mig-switch-only'), { enabled: true, edits: 0, log: [] }));
+    expect(m.config).toEqual({ godModeEnabled: false, godModeOrigin: 'migrated-no-usage' });
+  });
+
+  it('chronicle entries of a migrated dynasty get the informational flag', () => {
+    const dead = autoPlay(newLife('mig-dyn'), 'd', 600).state;
+    const next = continueDynasty(dead, { seed: 'n', givenName: 'Nova', parentId: dynastyOptions(dead)[0]?.npcId ?? null }, ctx);
+    if (!next.ok) throw new Error(next.error.message);
+    const raw = asV7(next.state, { enabled: false, edits: 0, log: [] });
+    (raw.dynasty as { chronicle: Record<string, unknown>[] }).chronicle = (raw.dynasty as { chronicle: Record<string, unknown>[] }).chronicle.map(({ godMode: _g, ...rest }) => rest);
+    const m = migrate(raw);
+    expect(m.dynasty.chronicle.every((c) => c.godMode === false)).toBe(true);
+    expect(validateState(m)).toEqual([]);
+  });
+
+  it('migration is deterministic and the migrated life plays on', () => {
+    const raw = asV7(newLife('mig-play'), { enabled: false, edits: 0, log: [entry('ENABLED')] });
+    expect(canonicalStringify(migrate(raw))).toBe(canonicalStringify(migrate(raw)));
+    const played = autoPlay(migrate(raw), 'mp', 600).state;
+    expect(played.protagonist.death).not.toBeNull();
+    expect(validateState(played)).toEqual([]);
+  });
+});
+
+describe('older saves: v6 → v8 through the whole chain', () => {
+  it('adds neutral talents, skills and predispositions, and a GOD MODE choice derived from (no) use', () => {
     const s = newLife('mig-v6');
     const old = structuredClone(s) as unknown as Record<string, any>; // eslint-disable-line @typescript-eslint/no-explicit-any
     old.schemaVersion = 6;
+    delete old.config;
     delete old.godMode;
     delete old.achievements;
     delete old.protagonist.talents;
@@ -235,11 +408,11 @@ describe('migration v6 → v7', () => {
     const res = migrateSlot({ schemaVersion: 6, state: old, rng: s.rng, checksum: 'x' } as never, ctx.content)!;
     const migrated = (res.slot as { state: GameState; schemaVersion: number }).state;
     expect((res.slot as { schemaVersion: number }).schemaVersion).toBe(SCHEMA_VERSION);
-    expect(migrated.godMode).toEqual({ enabled: false, edits: 0, log: [] });
+    expect(migrated.config).toEqual({ godModeEnabled: false, godModeOrigin: 'migrated-no-usage' });
+    expect(migrated.godMode).toEqual({ edits: 0, log: [] });
     expect(migrated.protagonist.predispositions).toEqual({ longevity: 50, robustness: 50 });
     expect(validateState(migrated)).toEqual([]);
     const r = simulate(migrated, { type: 'ADVANCE_YEAR', commandId: 'm', expectedRevision: migrated.revision }, ctx);
-    if (r.ok && r.state.simulation.status === 'PAUSED_EVENT') pendingChoices(r.state, ctx);
     expect(r.ok).toBe(true);
   });
 });
